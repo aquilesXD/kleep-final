@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/layout/Sidebar";
 import { CampaignSidebar } from "../layout/CampainSidebar";
 import { Testimonial } from "./Testimonial";
@@ -7,8 +7,14 @@ import { FeatureCard } from "./FeatureCard";
 import { AudienceCard } from "./AudienceCard";
 import { CheckCircle } from "lucide-react";
 
-// Token de autenticación
-const API_TOKEN = "LdiVnsTkivJjcoEs16w5D6osE39IRbu1hJ75WjVVe2vf5JGyJFvjE0u4dojto4lq";
+// Get auth token from localStorage or sessionStorage
+const getAuthToken = (): string => {
+  return localStorage.getItem("authToken") || 
+         localStorage.getItem("token") || 
+         sessionStorage.getItem("authToken") || 
+         sessionStorage.getItem("token") || 
+         ""; // Devuelve cadena vacía si no encuentra token
+};
 
 // Interfaz para los datos de la campaña
 interface CampaignData {
@@ -68,18 +74,61 @@ export default function Campaign() {
   const [campaignData, setCampaignData] = useState<CampaignResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthError, setIsAuthError] = useState(false);
+  const navigate = useNavigate();
 
+  // Cargar datos de la campaña actual
   useEffect(() => {
     const fetchCampaignData = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}`, {
+        setIsAuthError(false);
+        
+        // Obtener el token mediante la función getAuthToken
+        const token = getAuthToken();
+        
+        // Verificar que haya un token válido
+        if (!token) {
+          setIsAuthError(true);
+          throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
+        }
+        
+        // Intentar hacer la petición con el formato Bearer
+        let response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}`, {
           headers: {
-            'Authorization': `Bearer ${API_TOKEN}`,
+            'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           }
         });
+
+        // Si el error es 401 (No autorizado), intentar con formatos alternativos
+        if (response.status === 401) {
+          // Intentar con formato alternativo (solo token sin Bearer)
+          response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}`, {
+            headers: {
+              'Authorization': token,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            }
+          });
+          
+          // Si sigue fallando, intentar con query param
+          if (response.status === 401) {
+            response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}?api_token=${token}`, {
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              }
+            });
+            
+            // Si sigue fallando, es un problema de autenticación real
+            if (response.status === 401) {
+              setIsAuthError(true);
+              throw new Error('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
+            }
+          }
+        }
 
         if (!response.ok) {
           throw new Error(`Error al cargar los datos de la campaña (${response.status})`);
@@ -125,11 +174,19 @@ export default function Campaign() {
     return (
       <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center">
         <p className="text-red-500 text-xl">Error: {error}</p>
-        <button 
-          onClick={() => window.location.reload()} 
-          className="mt-4 bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-md">
-          Reintentar
-        </button>
+        {isAuthError ? (
+          <button 
+            onClick={() => navigate('/signin')} 
+            className="mt-4 bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-md">
+            Iniciar sesión
+          </button>
+        ) : (
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-md">
+            Reintentar
+          </button>
+        )}
       </div>
     );
   }
@@ -142,6 +199,8 @@ export default function Campaign() {
         <div className="flex flex-col lg:flex-row">
           <CampaignSidebar />
           <main className="flex-1 p-4 lg:p-8">
+            
+            
             {campaignData && (
               <div className="max-w-4xl mx-auto">
                 <div className="text-center">

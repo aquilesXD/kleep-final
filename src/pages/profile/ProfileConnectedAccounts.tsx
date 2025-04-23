@@ -267,7 +267,7 @@ const ProfileConnectedAccounts = () => {
     if (countdownInterval) {
       clearInterval(countdownInterval);
     }
-    
+
     // Configurar nuevo intervalo
     const interval = setInterval(() => {
       setTimeRemaining(prev => {
@@ -313,10 +313,10 @@ const ProfileConnectedAccounts = () => {
     // Verificar tiempo mínimo entre verificaciones
     const now = new Date().getTime();
     const MIN_TIME_BETWEEN_VERIFICATIONS_MS = 30 * 1000; // 30 segundos
-    
+
     if (lastVerificationTime !== null) {
       const elapsedTime = now - lastVerificationTime;
-      
+
       if (elapsedTime < MIN_TIME_BETWEEN_VERIFICATIONS_MS) {
         const secondsToWait = Math.ceil((MIN_TIME_BETWEEN_VERIFICATIONS_MS - elapsedTime) / 1000);
         setTimeRemaining(secondsToWait);
@@ -373,14 +373,14 @@ const ProfileConnectedAccounts = () => {
 
         // Registrar tiempo de verificación
         setLastVerificationTime(now);
-        
+
         // Iniciar cuenta regresiva
         setTimeRemaining(30);
         startCountdown();
-        
+
         if (result.isVerified) {
-          // Cerrar modal después de verificación exitosa
-          setTimeout(() => {
+        // Cerrar modal después de verificación exitosa
+        setTimeout(() => {
             handleCloseModal();
             toast.success('¡Cuenta verificada exitosamente!');
           }, 2000);

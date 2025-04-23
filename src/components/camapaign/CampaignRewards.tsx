@@ -1,44 +1,267 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { useParams, useNavigate } from "react-router-dom"
 import { CampaignSidebar } from "../layout/CampainSidebar";
 import Sidebar from "../layout/Sidebar";
 import { toast } from 'react-hot-toast';
 
+// Get auth token from localStorage or sessionStorage
+const getAuthToken = (): string => {
+  return localStorage.getItem("authToken") || 
+         localStorage.getItem("token") || 
+         sessionStorage.getItem("authToken") || 
+         sessionStorage.getItem("token") || 
+         ""; // Devuelve cadena vacía si no encuentra token
+};
+
+// Interfaz para la campaña
+interface Campaign {
+  id: number;
+  name: string;
+  description: string;
+  type: string;
+  banner_image: string;
+  profile_image: string;
+  total_budget: string;
+  price_per_view: string;
+  platforms: string;
+  budget_spent: string;
+  created_at: string;
+  admin_id: number;
+  admin_name: string;
+  admin_profile_image: string;
+  budget_percentage: string;
+}
+
+// Interfaz para los requisitos
+interface Requirement {
+  id: number;
+  description: string;
+}
+
+// Interfaz para la respuesta de la API
+interface RewardsResponse {
+  campaign: Campaign;
+  requirements: Requirement[];
+}
+
+// Interfaz para el envío de video
+interface VideoSubmission {
+  url: string;
+  title: string;
+  description: string;
+  tiktok_account_id: number;
+}
 
 export default function CampaignRewards() {
-  const [videoLink, setVideoLink] = useState("")
-  const navigate = useNavigate()
+  const { campaignId = "1" } = useParams<{ campaignId: string }>();
+  const [videoLink, setVideoLink] = useState("");
+  const [videoTitle, setVideoTitle] = useState("Mi video para la campaña");
+  const [videoDescription, setVideoDescription] = useState("Video promocional cumpliendo con los requisitos");
+  const [tiktokAccountId, setTiktokAccountId] = useState(7);
+  const [submitting, setSubmitting] = useState(false);
+  const [rewardsData, setRewardsData] = useState<RewardsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isAuthError, setIsAuthError] = useState(false);
+  const navigate = useNavigate();
 
-  // Verificar autenticación al cargar el componente
+  // Obtener los datos de recompensas
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem("isAuthenticated")
-    const userEmail = localStorage.getItem("userEmail")
+    let ignore = false;
+    
+    const fetchRewards = async () => {
+      try {
+        setLoading(true);
+        setIsAuthError(false);
+        
+        // Obtener el token mediante la función getAuthToken
+        const token = getAuthToken();
+        
+        // Verificar que haya un token válido
+        if (!token) {
+          setIsAuthError(true);
+          throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
+        }
+        
+        // Intentar hacer la petición con el formato Bearer
+        let response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/rewards`, {
+          headers: {
+            'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        });
 
-    // Verificar que tanto isAuthenticated como userEmail existan
-    if (!isAuthenticated || !userEmail) {
-      // Limpiar cualquier dato de sesión parcial
-      localStorage.removeItem("isAuthenticated")
-      localStorage.removeItem("userEmail")
-      localStorage.removeItem("apiResponse")
+        // Si el error es 401 (No autorizado), intentar con formatos alternativos
+        if (response.status === 401) {
+          // Intentar con formato alternativo (solo token sin Bearer)
+          response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/rewards`, {
+            headers: {
+              'Authorization': token,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            }
+          });
+          
+          // Si sigue fallando, intentar con query param
+          if (response.status === 401) {
+            response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/rewards?api_token=${token}`, {
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              }
+            });
+            
+            // Si sigue fallando, es un problema de autenticación real
+            if (response.status === 401) {
+              setIsAuthError(true);
+              throw new Error('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
+            }
+          }
+        }
 
-      // Redirigir al inicio de sesión
-      navigate("/signin")
-    }
-  }, [navigate])
+        if (!response.ok) {
+          throw new Error(`Error al cargar las recompensas (${response.status})`);
+        }
 
-  const handleSubmit = () => {
-    // Aquí iría la lógica para enviar el enlace del video
-    console.log("Submitting video link:", videoLink);
-    // Mostrar algún tipo de confirmación o feedback
-    if (videoLink) {
-      toast.success("Enlace de vídeo enviado correctamente!");
-      setVideoLink("");
-    } else {
+        const data = await response.json();
+        
+        // Verificar si debemos ignorar esta respuesta (componente desmontado)
+        if (!ignore) {
+          setRewardsData(data);
+          setError(null);
+        }
+      } catch (err) {
+        if (!ignore) {
+          const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+          console.error('Error al cargar las recompensas:', errorMessage);
+          setError(errorMessage);
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchRewards();
+    
+    // Limpieza al desmontar el componente
+    return () => {
+      ignore = true;
+    };
+  }, [campaignId]);
+
+  const handleSubmit = async () => {
+    if (!videoLink) {
       toast.error("Por favor ingrese un enlace de video válido.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      
+      // Obtener el token mediante la función getAuthToken
+      const token = getAuthToken();
+      
+      // Verificar que haya un token válido
+      if (!token) {
+        setIsAuthError(true);
+        throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
+      }
+
+      // Preparar los datos para enviar
+      const videoData: VideoSubmission = {
+        url: videoLink,
+        title: videoTitle,
+        description: videoDescription,
+        tiktok_account_id: tiktokAccountId
+      };
+
+      // Hacer la petición para enviar el video
+      const response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/submit-video`, {
+        method: 'POST',
+        headers: {
+          'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(videoData)
+      });
+
+      // Si el error es 401 (No autorizado), es un problema de autenticación
+      if (response.status === 401) {
+        setIsAuthError(true);
+        throw new Error('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
+      }
+
+      if (!response.ok) {
+        throw new Error(`Error al enviar el video (${response.status})`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        toast.success("¡Video enviado correctamente! Tu participación en la campaña ha sido registrada.");
+        setVideoLink("");
+        // También podríamos reiniciar los demás valores o redirigir a otra página
+      } else {
+        throw new Error(data.message || "Error al enviar el video");
+      }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      console.error('Error al enviar el video:', errorMessage);
+      toast.error(`Error: ${errorMessage}`);
+    } finally {
+      setSubmitting(false);
     }
   }
+
+  // Calcular días restantes (ejemplo: 56 días)
+  const daysLeft = 56;
+  
+  // Calcular porcentaje de tiempo restante (ejemplo: 38%)
+  const timePercentage = 38;
+
+  // Mostrar mensaje de carga mientras se obtienen los datos
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#121212] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-violet-500"></div>
+        <p className="text-white ml-4">Cargando recompensas...</p>
+      </div>
+    );
+  }
+
+  // Mostrar mensaje de error si algo falla
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center">
+        <p className="text-red-500 text-xl">Error: {error}</p>
+        
+        {isAuthError ? (
+          <button 
+            onClick={() => navigate('/signin')} 
+            className="mt-4 bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-md">
+            Iniciar sesión
+          </button>
+        ) : (
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-md">
+            Reintentar
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // Datos de la campaña y requisitos
+  const campaign = rewardsData?.campaign;
+  const requirements = rewardsData?.requirements || [];
 
   return (
     <div className="min-h-screen bg-[#121212]">
@@ -58,11 +281,11 @@ export default function CampaignRewards() {
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <h3 className="text-gray-400 text-sm uppercase font-medium">PAGADO</h3>
-                    <span className="text-white text-sm">1%</span>
+                    <span className="text-white text-sm">{campaign?.budget_percentage || 0}%</span>
                   </div>
-                  <p className="text-white text-sm">$13,45 de $10,000 pagados</p>
+                  <p className="text-white text-sm">${campaign?.budget_spent || "0"} de ${campaign?.total_budget || "0"} pagados</p>
                   <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-orange-500" style={{ width: "1%" }}></div>
+                    <div className="h-full bg-orange-500" style={{ width: `${campaign?.budget_percentage || 0}%` }}></div>
                   </div>
                 </div>
 
@@ -70,11 +293,11 @@ export default function CampaignRewards() {
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <h3 className="text-gray-400 text-sm uppercase font-medium">TIEMPO RESTANTE</h3>
-                    <span className="text-white text-sm">38%</span>
+                    <span className="text-white text-sm">{timePercentage}%</span>
                   </div>
-                  <p className="text-white text-sm">quedan 56 días</p>
+                  <p className="text-white text-sm">quedan {daysLeft} días</p>
                   <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-orange-500" style={{ width: "38%" }}></div>
+                    <div className="h-full bg-orange-500" style={{ width: `${timePercentage}%` }}></div>
                   </div>
                 </div>
               </div>
@@ -84,7 +307,7 @@ export default function CampaignRewards() {
                 <div>
                   <h3 className="text-gray-400 text-xs uppercase font-medium mb-2">RECOMPENSAS</h3>
                   <div className="bg-blue-600 text-white text-sm font-medium py-1.5 px-3 rounded-md inline-block">
-                    4.00 US$ / 1 mil
+                    {parseFloat(campaign?.price_per_view || "0").toFixed(2)} US$ / 1 mil
                   </div>
                 </div>
 
@@ -92,7 +315,7 @@ export default function CampaignRewards() {
                 <div>
                   <h3 className="text-gray-400 text-xs uppercase font-medium mb-2">TIPO DE CONTENIDO</h3>
                   <div className="bg-gray-800 text-white text-sm py-1.5 px-3 rounded-md inline-block">
-                    Clipping
+                    {campaign?.type || "Clipping"}
                   </div>
                 </div>
               </div>
@@ -102,7 +325,7 @@ export default function CampaignRewards() {
                 <div>
                   <h3 className="text-gray-400 text-xs uppercase font-medium mb-2">MÁXIMO PAGADO</h3>
                   <div className="bg-gray-800 text-white text-sm py-1.5 px-3 rounded-md inline-block">
-                    $ 500
+                    $ {campaign?.total_budget || "500"}
                   </div>
                 </div>
 
@@ -110,7 +333,7 @@ export default function CampaignRewards() {
                 <div>
                   <h3 className="text-gray-400 text-xs uppercase font-medium mb-2">CATEGORIA</h3>
                   <div className="bg-gray-800 text-white text-sm py-1.5 px-3 rounded-md inline-block">
-                    Creator
+                    {campaign?.type || "Creator"}
                   </div>
                 </div>
               </div>
@@ -118,12 +341,26 @@ export default function CampaignRewards() {
               {/* PLATFORMS */}
               <div className="mb-6">
                 <h3 className="text-gray-400 text-xs uppercase font-medium mb-2">PLATAFORMAS</h3>
-                <div className="flex">
-                  <div className="text-white text-xl">
-                    <svg viewBox="0 0 24 24" width="24" height="24" className="fill-current">
-                      <path d="M22.02 7.364v3.586c-.6-.064-1.2-.107-1.793-.107-.8 0-1.585.107-2.328.32-1.143.32-2.157.898-2.993 1.66V7.257v-4.45h-4.014v16.709c0 .064 0 .135.007.199h-4.078a2.505 2.505 0 0 1 .078-.606V2.807H2.878v17.643c0 1.902 1.528 3.437 3.407 3.437h12.214c1.88 0 3.407-1.535 3.407-3.437v-4.31a3.428 3.428 0 0 0-.235-1.251 3.34 3.34 0 0 0-.663-1.067 6.294 6.294 0 0 1 3.236-1.137v.021c-.086-1.2-.707-2.264-1.614-2.928.935-.67 1.557-1.75 1.65-2.978.014-.142.021-.285.021-.435H22.02Z" />
-                    </svg>
-                  </div>
+                <div className="flex space-x-2">
+                  {campaign?.platforms && (
+                    <div className="text-white text-xl">
+                      {campaign.platforms.toLowerCase().includes('tiktok') && (
+                        <svg viewBox="0 0 24 24" width="24" height="24" className="fill-current">
+                          <path d="M22.02 7.364v3.586c-.6-.064-1.2-.107-1.793-.107-.8 0-1.585.107-2.328.32-1.143.32-2.157.898-2.993 1.66V7.257v-4.45h-4.014v16.709c0 .064 0 .135.007.199h-4.078a2.505 2.505 0 0 1 .078-.606V2.807H2.878v17.643c0 1.902 1.528 3.437 3.407 3.437h12.214c1.88 0 3.407-1.535 3.407-3.437v-4.31a3.428 3.428 0 0 0-.235-1.251 3.34 3.34 0 0 0-.663-1.067 6.294 6.294 0 0 1 3.236-1.137v.021c-.086-1.2-.707-2.264-1.614-2.928.935-.67 1.557-1.75 1.65-2.978.014-.142.021-.285.021-.435H22.02Z" />
+                        </svg>
+                      )}
+                      {campaign.platforms.toLowerCase().includes('instagram') && (
+                        <svg viewBox="0 0 24 24" width="24" height="24" className="fill-current">
+                          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+                        </svg>
+                      )}
+                      {campaign.platforms.toLowerCase().includes('youtube') && (
+                        <svg viewBox="0 0 24 24" width="24" height="24" className="fill-current">
+                          <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z" />
+                        </svg>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -131,18 +368,11 @@ export default function CampaignRewards() {
               <div className="mb-6">
                 <h3 className="text-gray-400 text-xs uppercase font-medium mb-2">REQUIRIMIENTOS</h3>
                 <div className="space-y-2">
-                  <div className="bg-gray-800 text-white text-sm py-2 px-3 rounded-md">
-                    Análisis de audiencia objetivo (edad, intereses, ubicación)
-                  </div>
-                  <div className="bg-gray-800 text-white text-sm py-2 px-3 rounded-md">
-                    Elección del formato de anuncio (In-Feed, TopView, Branded Hashtag, Spark Ads)
-                  </div>
-                  <div className="bg-gray-800 text-white text-sm py-2 px-3 rounded-md">
-                    Uso de efectos y sonidos populares
-                  </div>
-                  <div className="bg-gray-800 text-white text-sm py-2 px-3 rounded-md">
-                    Incrementar conversiones (ventas, registros, descargas, etc.)
-                  </div>
+                  {requirements.map((requirement) => (
+                    <div key={requirement.id} className="bg-gray-800 text-white text-sm py-2 px-3 rounded-md">
+                      {requirement.description}
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -152,7 +382,7 @@ export default function CampaignRewards() {
                 <p className="text-gray-400 text-sm mb-4">Comparte el enlace de tu publicación a continuación.</p>
 
                 <div className="mb-4">
-                  <label htmlFor="videoLink" className="block text-gray-400 text-sm mb-2">Proporcionar enlance</label>
+                  <label htmlFor="videoLink" className="block text-gray-400 text-sm mb-2">Enlace del video *</label>
                   <input
                     type="text"
                     id="videoLink"
@@ -160,14 +390,50 @@ export default function CampaignRewards() {
                     className="w-full p-3 rounded-md bg-[#111] border border-[#333] text-white text-sm focus:outline-none focus:border-blue-500"
                     value={videoLink}
                     onChange={(e) => setVideoLink(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label htmlFor="videoTitle" className="block text-gray-400 text-sm mb-2">Título del video</label>
+                  <input
+                    type="text"
+                    id="videoTitle"
+                    placeholder="Título de su video"
+                    className="w-full p-3 rounded-md bg-[#111] border border-[#333] text-white text-sm focus:outline-none focus:border-blue-500"
+                    value={videoTitle}
+                    onChange={(e) => setVideoTitle(e.target.value)}
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label htmlFor="videoDescription" className="block text-gray-400 text-sm mb-2">Descripción</label>
+                  <textarea
+                    id="videoDescription"
+                    placeholder="Describa brevemente su video"
+                    className="w-full p-3 rounded-md bg-[#111] border border-[#333] text-white text-sm focus:outline-none focus:border-blue-500"
+                    value={videoDescription}
+                    onChange={(e) => setVideoDescription(e.target.value)}
+                    rows={3}
                   />
                 </div>
 
                 <button
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-center py-3 rounded-md transition"
+                  className={`w-full bg-blue-600 hover:bg-blue-700 text-white text-center py-3 rounded-md transition ${submitting ? 'opacity-70 cursor-not-allowed' : ''}`}
                   onClick={handleSubmit}
+                  disabled={submitting}
                 >
-                  Enviar
+                  {submitting ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Enviando...
+                    </span>
+                  ) : (
+                    "Enviar"
+                  )}
                 </button>
               </div>
             </div>

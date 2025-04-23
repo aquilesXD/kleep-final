@@ -141,7 +141,7 @@ const ProfileSidebar: React.FC<ProfileSidebarProps> = ({ mobile, onCloseMobileMe
     logout();
 
     // Redireccionar al login
-    navigate('/signin');
+    navigate('/campaign-home');
   };
 
   return (
