@@ -2,6 +2,8 @@
  * Servicio para manejar las operaciones relacionadas con la verificación de cuentas de TikTok
  */
 
+import { getAuthToken } from './authService'; // Asegurar que se importe correctamente
+
 interface TikTokAccount {
   id: string;
   username: string;
@@ -72,6 +74,58 @@ export const fetchTikTokAccounts = async (userId: string): Promise<TikTokAccount
       });
   } catch (error: any) {
       throw error;
+  }
+};
+
+/**
+ * Obtiene las cuentas de TikTok asociadas a un usuario desde la nueva API
+ * @returns Promise con las cuentas formateadas
+ */
+export const fetchTikTokAccountsFromNewApi = async (): Promise<TikTokAccount[]> => {
+  try {
+    const apiUrl = 'https://contabl.net/kleep/api/tiktok-accounts';
+
+    // Obtener el token de autenticación
+    const authToken = getAuthToken();
+    if (!authToken) {
+      throw new Error('No se encontró un token de autenticación válido.');
+    }
+
+    const response = await fetch(apiUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+
+    if (response.status === 401) {
+      throw new Error('Error 401: No autorizado. Verifica tu token de autenticación.');
+    }
+
+    if (!response.ok) {
+      throw new Error(`Error en la petición: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success || !Array.isArray(data.accounts)) {
+      throw new Error('Formato de respuesta inválido');
+    }
+
+    // Transformar los datos al formato que necesita la UI
+    return data.accounts.map((account: any) => ({
+      id: String(account.id),
+      username: account.username,
+      isVerified: account.verified === 1,
+      verifiedStatus: account.verified === 0 ? 'pending' : undefined,
+      tiktok_code: account.verification_code, // Usar el código proporcionado por el backend
+      verified_request: account.created_at,
+      verified_att: 0, // Inicializar contador de intentos
+    }));
+  } catch (error: any) {
+    console.error('Error al obtener cuentas de TikTok:', error.message);
+    throw new Error(`Error al obtener cuentas de TikTok: ${error.message}`);
   }
 };
 
@@ -181,6 +235,56 @@ export const requestTikTokVerification = async (
           success: false,
           message: error.message || 'Error al solicitar verificación'
       };
+  }
+};
+
+/**
+ * Solicita la verificación de una cuenta de TikTok
+ * @param accountId ID de la cuenta de TikTok
+ * @returns Promise con el resultado de la solicitud de verificación
+ */
+export const requestTikTokAccountVerification = async (accountId: string): Promise<{ success: boolean; message: string; account?: TikTokAccount; verification_code?: string }> => {
+  try {
+    const apiUrl = `https://contabl.net/kleep/api/tiktok-accounts/verify`;
+
+    // Obtener el token de autenticación
+    const authToken = getAuthToken();
+    if (!authToken) {
+      throw new Error('No se encontró un token de autenticación válido.');
+    }
+
+    // Configurar los datos de la solicitud
+    const requestData = { account_id: accountId };
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(requestData),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error en la solicitud de verificación: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.message || 'Error desconocido en la solicitud de verificación');
+    }
+
+    return {
+      success: data.success,
+      message: data.message,
+      account: data.account,
+      verification_code: data.verification_code,
+    };
+  } catch (error: any) {
+    console.error('Error al solicitar la verificación de la cuenta de TikTok:', error.message);
+    throw new Error(`Error al solicitar la verificación: ${error.message}`);
   }
 };
 
@@ -344,10 +448,60 @@ export const resetTikTokVerification = async (
   }
 };
 
+/**
+ * Obtiene las cuentas de TikTok no verificadas desde la API
+ * @returns Promise con las cuentas no verificadas
+ */
+export const fetchUnverifiedTikTokAccounts = async (): Promise<TikTokAccount[]> => {
+  try {
+    const apiUrl = 'https://contabl.net/kleep/api/tiktok-accounts/unverified';
+
+    // Obtener el token de autenticación
+    const authToken = getAuthToken();
+    if (!authToken) {
+      throw new Error('No se encontró un token de autenticación válido.');
+    }
+
+    const response = await fetch(apiUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error en la petición: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success || !Array.isArray(data.accounts)) {
+      throw new Error('Formato de respuesta inválido');
+    }
+
+    // Transformar los datos al formato que necesita la UI
+    return data.accounts.map((account: any) => ({
+      id: String(account.id),
+      username: account.username,
+      tiktok_code: account.verification_code,
+      verified_request: account.created_at,
+      isVerified: false, // Por defecto, no están verificadas
+      verifiedStatus: 'unverified',
+    }));
+  } catch (error: any) {
+    console.error('Error al obtener cuentas no verificadas de TikTok:', error.message);
+    throw new Error(`Error al obtener cuentas no verificadas: ${error.message}`);
+  }
+};
+
 export default {
   fetchTikTokAccounts,
+  fetchTikTokAccountsFromNewApi,
   generateVerificationCode,
   requestTikTokVerification,
+  requestTikTokAccountVerification,
   checkVerificationStatus,
-  resetTikTokVerification
+  resetTikTokVerification,
+  fetchUnverifiedTikTokAccounts
 };

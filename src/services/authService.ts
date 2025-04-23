@@ -227,6 +227,18 @@ export const getVideoToPay = async (email: string) => {
     throw new Error(error.message || "No se pudo obtener la data del usuario");
   }
 };
+
+// Get auth token from localStorage or sessionStorage
+const getAuthToken = (): string => {
+  return localStorage.getItem("authToken") || 
+         localStorage.getItem("token") || 
+         sessionStorage.getItem("authToken") || 
+         sessionStorage.getItem("token") || 
+         ""; // Devuelve cadena vacía si no encuentra token
+};
+
+export { getAuthToken };
+
 // Inicializar el servicio al importar el módulo
 initAuthService();
 

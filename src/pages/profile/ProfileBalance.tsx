@@ -124,17 +124,17 @@ const ProfileBalance = () => {
       )
 
       if (response.data.success && Array.isArray(response.data.accounts)) {
-        setTiktokAccounts(response.data.accounts)
-        
+        setTiktokAccounts(response.data.accounts);
+
         // Actualiza el estado de los videos con la información de las cuentas asociadas
         if (videos.length > 0) {
           const updatedVideos = videos.map(video => {
-            // Busca si hay una cuenta de TikTok con el mismo username que creator
+            // Normalizar nombres de usuario para evitar problemas de coincidencia
+            const normalizedCreator = video.creator.toLowerCase().replace('@', '');
             const associatedAccount = response.data.accounts.find(
-              account => video.creator.toLowerCase() === account.username.toLowerCase() ||
-                         video.creator.toLowerCase() === '@' + account.username.toLowerCase()
+              account => normalizedCreator === account.username.toLowerCase()
             );
-            
+
             // Si encuentra una cuenta asociada, agrega la información al objeto de video
             if (associatedAccount) {
               return {
@@ -143,60 +143,71 @@ const ProfileBalance = () => {
                 hasVerifiedAccount: associatedAccount.verification_status === 'verified'
               };
             }
-            
+
             return video;
           });
-          
+
           setVideos(updatedVideos);
         }
       } else {
         // Si no hay cuentas o la respuesta no es exitosa, inicializar con un array vacío
-        setTiktokAccounts([])
+        setTiktokAccounts([]);
       }
-    } catch (error) {
-      console.error('Error al obtener cuentas de TikTok:', error)
-      setAccountsError('No se pudieron cargar las cuentas de TikTok')
+    } catch (error: any) {
+      console.error('Error al obtener cuentas de TikTok:', error);
+      if (error.response && error.response.status === 401) {
+        setAccountsError('No autorizado. Verifica tu sesión.');
+      } else if (error.response && error.response.status >= 500) {
+        setAccountsError('Error del servidor. Intenta más tarde.');
+      } else {
+        setAccountsError('No se pudieron cargar las cuentas de TikTok.');
+      }
     } finally {
-      setLoadingAccounts(false)
+      setLoadingAccounts(false);
     }
-  }, [videos])
+  }, [videos]);
 
   // Función para obtener cuentas no verificadas de TikTok
   const fetchUnverifiedTikTokAccounts = useCallback(async () => {
-    setLoadingUnverifiedAccounts(true)
-    setUnverifiedAccountsError(null)
+    setLoadingUnverifiedAccounts(true);
+    setUnverifiedAccountsError(null);
 
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('token');
       if (!token) {
-        throw new Error('No se encontró el token de autenticación')
+        throw new Error('No se encontró el token de autenticación');
       }
 
       // Hacer la petición a la API de cuentas no verificadas
-      const response = await axios.get<{success: boolean, accounts: TikTokAccount[]}>(
+      const response = await axios.get<{ success: boolean; accounts: TikTokAccount[] }>(
         TIKTOK_UNVERIFIED_ACCOUNTS_ENDPOINT,
         {
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
         }
-      )
+      );
 
       if (response.data.success && Array.isArray(response.data.accounts)) {
-        setUnverifiedAccounts(response.data.accounts)
-        // Ya no establecemos showTiktokVerificationSection basado en la respuesta
+        setUnverifiedAccounts(response.data.accounts);
       } else {
         // Si no hay cuentas o la respuesta no es exitosa, inicializar con un array vacío
-        setUnverifiedAccounts([])
+        setUnverifiedAccounts([]);
       }
-    } catch (error) {
-      console.error('Error al obtener cuentas de TikTok no verificadas:', error)
-      setUnverifiedAccountsError('No se pudieron cargar las cuentas de TikTok no verificadas')
+    } catch (error: any) {
+      console.error('Error al obtener cuentas de TikTok no verificadas:', error);
+      if (error.response && error.response.status === 401) {
+        setUnverifiedAccountsError('No autorizado. Verifica tu sesión.');
+      } else if (error.response && error.response.status >= 500) {
+        setUnverifiedAccountsError('Error del servidor. Intenta más tarde.');
+      } else {
+        setUnverifiedAccountsError('No se pudieron cargar las cuentas de TikTok no verificadas.');
+      }
     } finally {
-      setLoadingUnverifiedAccounts(false)
+      setLoadingUnverifiedAccounts(false);
     }
-  }, [])
+  }, []);
 
   // Función principal para obtener datos de la API
   const fetchBalanceData = async () => {
@@ -224,7 +235,6 @@ const ProfileBalance = () => {
 
       // Parsear respuesta JSON del balance
       const balanceData = await balanceResponse.json()
-      console.log('Balance API Response:', balanceData)
 
       if (!balanceData.success) {
         throw new Error('La respuesta de la API de balance no indica éxito')
@@ -245,7 +255,6 @@ const ProfileBalance = () => {
 
       // Parsear respuesta JSON de videos
       const videosData = await videosResponse.json()
-      console.log('Videos API Response:', videosData)
 
       let videosList = [];
       
@@ -281,7 +290,6 @@ const ProfileBalance = () => {
       
       // Si no hay videos en ninguna de las APIs, usar datos de ejemplo para mostrar la funcionalidad
       if (videosList.length === 0) {
-        console.log('No se encontraron videos, mostrando datos de ejemplo');
         videosList = [
           {
             id: 'video-example-1',
@@ -321,6 +329,18 @@ const ProfileBalance = () => {
           }
         ];
       }
+
+      // Filtrar videos para mostrar solo los asociados al usuario logueado
+      const userEmail = localStorage.getItem("userEmail");
+      if (!userEmail) {
+        throw new Error("No se encontró el email del usuario logueado");
+      }
+
+      videosList = videosList.filter((video: Video) => video.creator === userEmail);
+
+      if (videosList.length === 0) {
+        console.log("No se encontraron videos asociados al usuario logueado");
+      }
       
       // Actualizar el estado con la lista de videos procesada
       setVideos(videosList);
@@ -358,7 +378,6 @@ const ProfileBalance = () => {
         balanceObj.total = totalBalance;
       }
 
-      console.log('Balance calculado:', balanceObj);
       setBalance(balanceObj);
 
       // Usar directamente los depósitos de la API

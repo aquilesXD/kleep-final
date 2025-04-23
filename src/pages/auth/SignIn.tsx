@@ -285,8 +285,8 @@ export default function LoginForm() {
             }`}
             disabled={isLoading || isSuccess}
           >
-            {isLoading ? "Procesando (espera 3 segundos)..." : 
-             isSuccess ? "Código enviado ✓" : "Enviar Código"}
+            {isLoading ? "Cargando..." : 
+             isSuccess ? "Código enviado ✓" : "Continuar"}
           </button>
         </form>
 

@@ -63,106 +63,68 @@ export default function Home() {
   useEffect(() => {
     const fetchCampaigns = async () => {
       try {
-        setLoading(true)
-        
-        // Intentar con el token en el header primero (Bearer token)
+        setLoading(true);
+
+        // Intentar obtener las campañas principales
         let response = await fetch('https://contabl.net/kleep/api/campaigns', {
           headers: {
             'Authorization': `Bearer ${API_TOKEN}`,
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
+            'Accept': 'application/json',
+          },
         });
-        
-        // Si falla con 401, intentar con un formato diferente del token de autorización
-        if (response.status === 401) {
-          console.log("Intentando con formato de token diferente...");
-          
-          response = await fetch('https://contabl.net/kleep/api/campaigns', {
-            headers: {
-              'Authorization': API_TOKEN,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            }
-          });
-        }
-        
-        // Si sigue fallando, intentar con el token como parámetro de consulta
-        if (response.status === 401) {
-          console.log("Intentando autenticación alternativa con token como parámetro de consulta...");
-          
-          response = await fetch(`https://contabl.net/kleep/api/campaigns?api_token=${API_TOKEN}`, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            }
-          });
-          
-          // Si sigue fallando, intentar con 'token' en lugar de 'api_token'
-          if (response.status === 401) {
-            console.log("Intentando autenticación con 'token' como parámetro...");
-            
-            response = await fetch(`https://contabl.net/kleep/api/campaigns?token=${API_TOKEN}`, {
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              }
-            });
-          }
-        }
-        
+
         if (!response.ok) {
-          const statusCode = response.status;
-          throw new Error(`Error al cargar las campañas (${statusCode})`);
+          throw new Error(`Error al cargar las campañas (${response.status})`);
         }
-        
+
         const data = await response.json();
-        
+
         if (!data.campaigns) {
           throw new Error('Formato de respuesta inválido: no se encontraron campañas');
         }
-        
+
         // Guardar las campañas obtenidas
-        const allCampaigns = data.campaigns;
+        const allCampaigns = data.campaigns.map((campaign: Campaign) => ({
+          ...campaign,
+          is_joined: false, // Por defecto, ninguna campaña está unida
+        }));
         setCampaigns(allCampaigns);
         setTotalResults(allCampaigns.length);
-        
+
         // Mapear las campañas al formato de recompensas inicialmente
         const initialMappedRewards = allCampaigns.map(mapCampaignToReward);
         setRewards(initialMappedRewards);
-        
+
         // Si el usuario está autenticado, buscar las campañas a las que se ha unido
         if (isAuthenticated) {
           try {
-            console.log("Usuario autenticado, obteniendo campañas unidas...");
-            
-            // Obtener campañas a las que el usuario se ha unido
+            console.log('Usuario autenticado, obteniendo campañas unidas...');
+
             const joinedResponse = await fetch('https://contabl.net/kleep/api/campaigns/joined', {
               headers: {
                 'Authorization': `Bearer ${API_TOKEN}`,
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              }
+                'Accept': 'application/json',
+              },
             });
-            
+
             if (joinedResponse.ok) {
               const joinedData = await joinedResponse.json();
-              
+
               if (joinedData.campaigns && Array.isArray(joinedData.campaigns)) {
-                // Crear un Set con los IDs de las campañas unidas para búsqueda eficiente
                 const joinedCampaignIds = new Set(
-                  joinedData.campaigns.map((campaign: {id: number}) => campaign.id)
+                  joinedData.campaigns.map((campaign: { id: number }) => campaign.id)
                 );
-                
+
                 // Actualizar las campañas con la información de "unido"
                 const updatedCampaigns = allCampaigns.map((campaign: Campaign) => ({
                   ...campaign,
-                  is_joined: joinedCampaignIds.has(campaign.id)
+                  is_joined: joinedCampaignIds.has(campaign.id),
                 }));
-                
-                // Actualizar estado
+
                 setCampaigns(updatedCampaigns);
-                
+
                 // Actualizar recompensas con la nueva información
                 const updatedRewards = updatedCampaigns.map(mapCampaignToReward);
                 setRewards(updatedRewards);
@@ -171,18 +133,15 @@ export default function Home() {
               console.log(`Error al obtener campañas unidas: ${joinedResponse.status}`);
             }
           } catch (joinedErr) {
-            // Manejar error silenciosamente para no interrumpir la experiencia principal
             console.error('Error al obtener campañas unidas:', joinedErr);
-            // No mostramos este error al usuario, continuamos con las campañas sin marcar
           }
         }
-        
+
         setError(null);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
         console.error('Error al cargar campañas:', errorMessage);
         setError(errorMessage);
-        // No mostrar datos simulados, solo el error
         setRewards([]);
         setTotalResults(0);
       } finally {

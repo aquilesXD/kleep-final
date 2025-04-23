@@ -228,9 +228,6 @@ const VerifyCode: React.FC = () => {
         return;
       }
   
-      console.log('Verificando código:', enteredCode);
-      console.log('Email que se usará:', email);
-      
       // Enviamos el código al backend para su verificación
       const response = await fetch("https://contabl.net/kleep/api/auth/verify-code", {
         method: "POST",
@@ -248,7 +245,6 @@ const VerifyCode: React.FC = () => {
       const data = await response.json();
       
       if (data.success || data.verified || data.status === 'success') {
-        console.log('Verificación exitosa');
         setStatus('success');
         setSuccessMessage('¡Código verificado correctamente! Redirigiendo...');
         
@@ -294,7 +290,6 @@ const VerifyCode: React.FC = () => {
   
     try {
       // Solicitar nuevo código con email directamente
-      console.log('Solicitando nuevo código para:', email);
       
       const response = await fetch("https://contabl.net/kleep/api/auth/send-code", {
         method: "POST",
@@ -307,7 +302,6 @@ const VerifyCode: React.FC = () => {
       }
       
       const data = await response.json();
-      console.log('Respuesta de reenvío de código:', data);
       
       // Ya no almacenamos la respuesta de la API en localStorage
       // La verificación se realiza en el backend

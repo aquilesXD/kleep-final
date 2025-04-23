@@ -9,6 +9,7 @@ const API_USER_ENDPOINT = 'https://contabl.net/kleep/api/user';
 const SignUp: React.FC = () => {
   const [email, setEmail] = useState<string>('');
   const [name, setName] = useState<string>('');
+  const [username, setUsername] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
   const [country, setCountry] = useState<string>('');
   const [city, setCity] = useState<string>('');
@@ -173,6 +174,30 @@ const SignUp: React.FC = () => {
     );
   }, [isValidEmail, name, phone, country, city]);
 
+  // Función para manejar el cambio de nombre
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setName(e.target.value);
+    setError(null);
+  };
+
+  // Función para manejar el cambio de teléfono
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPhone(e.target.value);
+    setError(null);
+  };
+
+  // Función para manejar el cambio de país
+  const handleCountryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCountry(e.target.value);
+    setError(null);
+  };
+
+  // Función para manejar el cambio de ciudad
+  const handleCityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCity(e.target.value);
+    setError(null);
+  };
+
   // Función para validar correo electrónico
   const validateEmail = (email: string) => {
     const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -214,19 +239,6 @@ const SignUp: React.FC = () => {
     // Nota: No agregar Content-Type manualmente cuando se usa FormData,
     // el navegador lo establece automáticamente con el boundary correcto
 
-    // Log para depuración: mostrar todos los campos que se envían
-    console.log('Campos enviados al servidor:');
-    for (const pair of userData.entries()) {
-      console.log(`${pair[0]}: ${pair[1]}`);
-    }
-    
-    console.log('Enviando datos al servidor:', {
-      url: API_USER_ENDPOINT,
-      method: 'POST',
-      headers: Object.fromEntries(headers.entries()),
-      formDataKeys: [...userData.keys()]
-    });
-    
     const response = await fetch(API_USER_ENDPOINT, {
       method: 'POST',
       headers: headers,
@@ -234,8 +246,6 @@ const SignUp: React.FC = () => {
     });
 
     const responseText = await response.text();
-    console.log('Respuesta del servidor (texto):', responseText);
-    console.log('Código de estado HTTP:', response.status);
     
     let responseData;
     try {
@@ -338,7 +348,7 @@ const SignUp: React.FC = () => {
 
         // Llamar a la API de creación de usuario
         const userResponse = await createUserProfile(formData);
-        
+
         handleSuccessfulRegistration(userResponse, {
           name: cleanName,
           phone: cleanPhone,
@@ -351,7 +361,6 @@ const SignUp: React.FC = () => {
         
         // Si el error es 422, intentar con JSON
         if (formDataError.message && formDataError.message.includes('422')) {
-          console.log('Intentando con formato JSON como alternativa...');
           
           // INTENTO 2: Enviar datos como JSON (sin archivos)
           const jsonData = {
@@ -369,8 +378,6 @@ const SignUp: React.FC = () => {
           if (token) {
             headers.append('Authorization', `Bearer ${token}`);
           }
-          
-          console.log('Enviando datos JSON:', jsonData);
           
           const jsonResponse = await fetch(API_USER_ENDPOINT, {
             method: 'POST',
@@ -476,6 +483,7 @@ const SignUp: React.FC = () => {
         </div>
 
         <form className="mt-6" onSubmit={handleSubmit}>
+          {/* Campos permitidos: name, phone, country, city, profile_picture */}
           <div className="mb-4">
             <input
               className="w-full py-3 px-4 bg-[rgba(28,28,28,0.7)] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a78bfa] border border-[rgba(75,75,75,0.5)]"
@@ -483,25 +491,12 @@ const SignUp: React.FC = () => {
               placeholder="Nombre completo"
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={handleNameChange}
               disabled={isLoading}
               autoComplete="name"
             />
           </div>
-          
-          <div className="mb-4">
-            <input
-              className="w-full py-3 px-4 bg-[rgba(28,28,28,0.7)] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a78bfa] border border-[rgba(75,75,75,0.5)]"
-              id="email"
-              placeholder="Correo electrónico"
-              type="email"
-              value={email}
-              onChange={handleEmailChange}
-              disabled={isLoading}
-              autoComplete="email"
-            />
-          </div>
-          
+
           <div className="mb-4">
             <input
               className="w-full py-3 px-4 bg-[rgba(28,28,28,0.7)] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a78bfa] border border-[rgba(75,75,75,0.5)]"
@@ -509,12 +504,12 @@ const SignUp: React.FC = () => {
               placeholder="Teléfono"
               type="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={handlePhoneChange}
               disabled={isLoading}
               autoComplete="tel"
             />
           </div>
-          
+
           <div className="mb-4">
             <input
               className="w-full py-3 px-4 bg-[rgba(28,28,28,0.7)] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a78bfa] border border-[rgba(75,75,75,0.5)]"
@@ -522,12 +517,12 @@ const SignUp: React.FC = () => {
               placeholder="País"
               type="text"
               value={country}
-              onChange={(e) => setCountry(e.target.value)}
+              onChange={handleCountryChange}
               disabled={isLoading}
               autoComplete="country"
             />
           </div>
-          
+
           <div className="mb-4">
             <input
               className="w-full py-3 px-4 bg-[rgba(28,28,28,0.7)] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a78bfa] border border-[rgba(75,75,75,0.5)]"
@@ -535,12 +530,12 @@ const SignUp: React.FC = () => {
               placeholder="Ciudad"
               type="text"
               value={city}
-              onChange={(e) => setCity(e.target.value)}
+              onChange={handleCityChange}
               disabled={isLoading}
               autoComplete="address-level2"
             />
           </div>
-          
+
           <div className="mb-5">
             <label className="block text-white text-sm mb-2">Foto de perfil (opcional)</label>
             <div className="flex items-center gap-4">
@@ -561,7 +556,7 @@ const SignUp: React.FC = () => {
               </label>
             </div>
           </div>
-          
+
           {error && <p className="text-red-500 text-sm mt-1 mb-4">{error}</p>}
           
           <button

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { AlertTriangle, X, CheckCircle, AlertCircle, Clock, RefreshCw } from 'lucide-react';
 import tiktokVerificationService from '../../services/tiktokVerificationService';
 import { toast } from 'react-hot-toast';
+import { getAuthToken } from '../../services/authService'; // Importar la función getAuthToken
 
 interface TikTokAccount {
   id: string;
@@ -52,33 +53,19 @@ const ProfileConnectedAccounts = () => {
   const [timeRemaining, setTimeRemaining] = useState<number>(0); // Tiempo restante para el próximo intento
   const [countdownInterval, setCountdownInterval] = useState<ReturnType<typeof setInterval> | null>(null); // Intervalo para la cuenta regresiva
 
-  useEffect(() => {
-    fetchTikTokAccounts();
-
-    // Establecer un intervalo para verificar el estado de las cuentas pendientes cada 30 segundos
-    const intervalId = setInterval(() => {
-      if (accounts.some(acc => acc.verifiedStatus === 'pending')) {
-        checkPendingAccountsStatus();
-      }
-    }, 30000); // 30 segundos
-
-    return () => clearInterval(intervalId);
-  }, []);
-
-  // Función para obtener las cuentas de TikTok
   const fetchTikTokAccounts = async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // Obtener el ID de usuario
-      const userId = await getUserId();
-      if (!userId) {
-        throw new Error('No se pudo determinar el ID de usuario');
+      // Obtener el token de autenticación
+      const authToken = getAuthToken();
+      if (!authToken) {
+        throw new Error('No se encontró un token de autenticación válido.');
       }
 
-      // Obtener cuentas de TikTok usando el servicio
-      const accountsData = await tiktokVerificationService.fetchTikTokAccounts(userId);
+      // Obtener cuentas de TikTok usando la nueva API
+      const accountsData = await tiktokVerificationService.fetchTikTokAccountsFromNewApi();
       setAccounts(accountsData);
 
       // Si hay cuentas pendientes, verificar su estado actual
@@ -91,6 +78,41 @@ const ProfileConnectedAccounts = () => {
       setIsLoading(false);
     }
   };
+
+  const fetchUnverifiedAccounts = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Llamar a la función para obtener cuentas no verificadas
+      const unverifiedAccounts = await tiktokVerificationService.fetchUnverifiedTikTokAccounts();
+
+      // Filtrar cuentas duplicadas antes de actualizar el estado
+      setAccounts((prevAccounts) => {
+        const existingIds = new Set(prevAccounts.map((acc) => acc.id));
+        const filteredAccounts = unverifiedAccounts.filter((acc) => !existingIds.has(acc.id));
+        return [...prevAccounts, ...filteredAccounts];
+      });
+    } catch (error: any) {
+      setError(`Error al cargar cuentas no verificadas: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTikTokAccounts();
+    fetchUnverifiedAccounts(); // Llamar a la función para obtener cuentas no verificadas
+
+    // Establecer un intervalo para verificar el estado de las cuentas pendientes cada 30 segundos
+    const intervalId = setInterval(() => {
+      if (accounts.some(acc => acc.verifiedStatus === 'pending')) {
+        checkPendingAccountsStatus();
+      }
+    }, 30000); // 30 segundos
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   // Función para obtener el ID de usuario desde localStorage o API
   const getUserId = async (): Promise<string | null> => {
@@ -478,6 +500,42 @@ const ProfileConnectedAccounts = () => {
     }
   };
 
+  const handleRequestVerification = async (accountId: string) => {
+    try {
+      setIsSubmitting(true);
+      setVerificationStatus('loading');
+      setStatusMessage('Enviando solicitud de verificación...');
+
+      const result = await tiktokVerificationService.requestTikTokAccountVerification(accountId);
+
+      if (result.success) {
+        setAccounts((prevAccounts) =>
+          prevAccounts.map((account) =>
+            account.id === accountId
+              ? {
+                  ...account,
+                  verifiedStatus: 'pending',
+                  tiktok_code: result.verification_code,
+                  verified_request: new Date().toISOString(),
+                }
+              : account
+          )
+        );
+
+        setVerificationStatus('success');
+        setStatusMessage(result.message);
+      } else {
+        setVerificationStatus('error');
+        setStatusMessage(result.message || 'Error al solicitar la verificación.');
+      }
+    } catch (error: any) {
+      setVerificationStatus('error');
+      setStatusMessage(error.message || 'Error desconocido al solicitar la verificación.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Función para renderizar el indicador de estado de la cuenta
   const renderVerificationStatus = (account: TikTokAccount) => {
     if (account.isVerified) {
@@ -488,34 +546,10 @@ const ProfileConnectedAccounts = () => {
         </div>
       );
     } else if (account.verifiedStatus === 'pending') {
-      // Verificar si la cuenta ha alcanzado el límite de intentos
-      const hasMaxAttempts = account.verified_att !== undefined && account.verified_att >= 3;
-
       return (
-        <div>
-          <div
-            className={`flex items-center ${hasMaxAttempts ? 'text-orange-500' : 'text-yellow-500'} text-sm mt-2 ${hasMaxAttempts ? 'cursor-pointer hover:underline' : ''}`}
-            onClick={hasMaxAttempts ? () => handleVerify(account.id) : undefined}
-            title={hasMaxAttempts ? "Haz clic para reiniciar el proceso de verificación" : undefined}
-          >
-            {hasMaxAttempts ? <AlertTriangle className="w-4 h-4 mr-1" /> : <AlertCircle className="w-4 h-4 mr-1" />}
-            <span>{hasMaxAttempts ? 'Reintentar Verificacion' : 'Verificación pendiente'}</span>
-          </div>
-
-          {account.verified_request && !hasMaxAttempts && (
-            <div className="text-gray-400 text-xs mt-1 flex items-center">
-              {getTimeRemaining(account.verified_request)}
-            </div>
-          )}
-          
-          {hasMaxAttempts && (
-            <div
-              className="text-orange-400 text-xs mt-1 cursor-pointer hover:underline"
-              onClick={() => handleVerify(account.id)}
-              title="Haz clic para reiniciar el proceso de verificación"
-            >
-            </div>
-          )}
+        <div className="flex items-center text-yellow-500 text-sm mt-2">
+          <Clock className="w-4 h-4 mr-1" />
+          <span>Verificación pendiente</span>
         </div>
       );
     } else {
@@ -524,9 +558,9 @@ const ProfileConnectedAccounts = () => {
           <AlertTriangle className="text-indigo-400 w-4 h-4 mr-1" />
           <button
             className="text-indigo-400 text-sm hover:underline"
-            onClick={() => handleVerify(account.id)}
+            onClick={() => handleRequestVerification(account.id)}
           >
-            Verificar
+          Verificar
           </button>
         </div>
       );
@@ -595,8 +629,8 @@ const ProfileConnectedAccounts = () => {
           ) : (
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap gap-4">
-                {accounts.map((account) => (
-                  <div key={account.id} className="relative">
+                {accounts.map((account, index) => (
+                  <div key={`${account.id}-${index}`} className="relative">
                     <div className="bg-[#161616] text-white rounded-full px-4 py-2 flex items-center">
                       <div className={`w-3 h-3 rounded-full mr-2 ${
                         account.isVerified ? 'bg-green-500' :
