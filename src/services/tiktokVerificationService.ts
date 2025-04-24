@@ -149,8 +149,7 @@ export const fetchTikTokAccountsFromNewApi = async (): Promise<TikTokAccount[]> 
       verified_att: 0, // Inicializar contador de intentos
     }));
   } catch (error: any) {
-    console.error('Error al obtener cuentas de TikTok:', error.message);
-    throw new Error(`Error al obtener cuentas de TikTok: ${error.message}`);
+    throw error;
   }
 };
 
@@ -192,8 +191,6 @@ export const requestTikTokVerification = async (
       code: tiktokCode,   // Añadir code también como alternativa
       status: 'pending'   // Indicar estado
     };
-
-    console.log('Enviando datos de verificación con código del backend:', tiktokCode);
 
     // Intentar primero con Bearer token
     let response = await fetch(VERIFY_URL, {
@@ -240,7 +237,6 @@ export const requestTikTokVerification = async (
       // Intentar obtener detalles del error 422
       try {
         const errorData = await response.json();
-        console.error('Error 422 detalles:', errorData);
         let errorMessage = 'Los datos enviados no son válidos.';
         
         // Extraer mensajes de error específicos si están disponibles
@@ -264,7 +260,6 @@ export const requestTikTokVerification = async (
     }
 
     const responseData = await response.json();
-    console.log('Respuesta de verificación:', responseData);
 
     // Preservar el código proporcionado por el backend
     const backendCode = responseData.verification_code || responseData.tiktok_code || tiktokCode;
@@ -284,11 +279,7 @@ export const requestTikTokVerification = async (
       },
     };
   } catch (error: any) {
-    console.error('Error al solicitar verificación:', error.message);
-    return {
-      success: false,
-      message: error.message || 'Error al solicitar verificación',
-    };
+    throw error;
   }
 };
 
@@ -325,8 +316,6 @@ export const requestTikTokAccountVerification = async (username: string, followe
       profile_url: profileUrl.includes('@') ? profileUrl : `https://www.tiktok.com/@${cleanUsername}`,
       status: 'pending'
     };
-
-    console.log('Enviando solicitud de verificación para obtener código del backend');
 
     // Intentar primero con Bearer token
     let response = await fetch(apiUrl, {
@@ -373,7 +362,6 @@ export const requestTikTokAccountVerification = async (username: string, followe
       // Intentar obtener información más detallada sobre el error
       try {
         const errorData = await response.json();
-        console.error('Error 422 en verificación alternativa:', errorData);
         
         let errorMessage = 'Datos de verificación rechazados por el servidor.';
         if (errorData.message) {
@@ -393,7 +381,6 @@ export const requestTikTokAccountVerification = async (username: string, followe
     }
 
     const data = await response.json();
-    console.log('Respuesta de verificación alternativa:', data);
 
     // Obtener el código de verificación de la respuesta
     let verificationCode = "";
@@ -404,8 +391,6 @@ export const requestTikTokAccountVerification = async (username: string, followe
     } else if (data.tiktok_code) {
       verificationCode = data.tiktok_code;
     }
-
-    console.log('Código de verificación recibido del backend:', verificationCode);
 
     // Si la respuesta no tiene la estructura esperada, intentar adaptarla
     if (!data.account) {
@@ -441,8 +426,7 @@ export const requestTikTokAccountVerification = async (username: string, followe
       verification_code: verificationCode, // Devolver el código del backend
     };
   } catch (error: any) {
-    console.error('Error al solicitar la verificación de la cuenta de TikTok:', error.message);
-    throw new Error(`Error al solicitar la verificación: ${error.message}`);
+    throw error;
   }
 };
 
@@ -618,11 +602,7 @@ export const resetTikTokVerification = async (
           };
     }
   } catch (error: any) {
-      console.error('Error al reiniciar verificación:', error.message);
-      return {
-        success: false,
-        message: 'Error al reiniciar verificación: ' + (error.message || 'Error desconocido')
-      };
+    throw error;
   }
 };
 
@@ -695,8 +675,7 @@ export const fetchUnverifiedTikTokAccounts = async (): Promise<TikTokAccount[]> 
       verifiedStatus: 'unverified',
     }));
   } catch (error: any) {
-    console.error('Error al obtener cuentas no verificadas de TikTok:', error.message);
-    throw new Error(`Error al obtener cuentas no verificadas: ${error.message}`);
+    throw error;
   }
 };
 

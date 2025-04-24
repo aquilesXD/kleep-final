@@ -205,17 +205,17 @@ export default function Home() {
               <div className="inline-flex rounded-md shadow-sm gap-2">
                 <button 
                   onClick={() => handleSortBy('most_paid')}
-                  className="bg-[#1c1c1c] hover:bg-orange-600 text-white px-4 py-2 rounded-md">
+                  className="bg-[#1c1c1c] hover:bg-violet-600 text-white px-4 py-2 rounded-md">
                   Mas pagados
                 </button>
                 <button 
                   onClick={() => handleSortBy('highest_cpm')}
-                  className="bg-[#1c1c1c] hover:bg-orange-600 text-white px-4 py-2 rounded-md">
+                  className="bg-[#1c1c1c] hover:bg-violet-600 text-white px-4 py-2 rounded-md">
                   CPM más alto
                 </button>
                 <button 
                   onClick={() => handleSortBy('newest')}
-                  className="bg-[#1c1c1c] hover:bg-orange-600 text-white px-4 py-2 rounded-md">
+                  className="bg-[#1c1c1c] hover:bg-violet-600 text-white px-4 py-2 rounded-md">
                   Mas Recientes
                 </button>
               </div>
@@ -228,14 +228,14 @@ export default function Home() {
 
           {loading ? (
             <div className="flex justify-center items-center py-20">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-violet-500"></div>
             </div>
           ) : error ? (
             <div className="text-center py-10">
               <p className="text-red-500">Error: {error}</p>
               <button 
                 onClick={() => window.location.reload()} 
-                className="mt-4 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md">
+                className="mt-4 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-md">
                 Reintentar
               </button>
             </div>

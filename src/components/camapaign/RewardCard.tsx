@@ -86,7 +86,7 @@ export function RewardCard({ reward, showEarnings = false }: RewardCardProps) {
           </div>
 
           <div className="h-3 w-full bg-[#121212] border border-[#2a2a2a] rounded mb-4">
-            <div className="h-full bg-orange-500 rounded" style={{ width: `${reward.percentage}%` }}></div>
+            <div className="h-full bg-violet-500 rounded" style={{ width: `${reward.percentage}%` }}></div>
           </div>
 
           {showEarnings && reward.views !== undefined && reward.earnings !== undefined ? (

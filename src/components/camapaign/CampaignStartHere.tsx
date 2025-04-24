@@ -124,7 +124,6 @@ export default function CampaignStartHere() {
         setError(null);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-        console.error('Error al cargar la guía de inicio:', errorMessage);
         setError(errorMessage);
       } finally {
         setLoading(false);

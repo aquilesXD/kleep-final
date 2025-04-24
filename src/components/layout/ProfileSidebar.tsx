@@ -89,8 +89,6 @@ const ProfileSidebar: React.FC<ProfileSidebarProps> = ({ mobile, onCloseMobileMe
 
       // Si obtuvimos datos de usuario desde la API
       if (userData) {
-        console.log('User data from API:', userData);
-        
         // Establecer el nombre de usuario
         if (userData.name) {
           setUserName(userData.name);
@@ -119,7 +117,6 @@ const ProfileSidebar: React.FC<ProfileSidebarProps> = ({ mobile, onCloseMobileMe
         getUserDataFromLocalStorage();
       }
     } catch (error) {
-      console.error('Error fetching user data from API:', error);
       // Fallar silenciosamente y usar datos locales
       getUserDataFromLocalStorage();
     } finally {

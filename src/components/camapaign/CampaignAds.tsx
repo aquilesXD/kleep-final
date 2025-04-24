@@ -124,7 +124,6 @@ const AnnouncementContent = () => {
       } catch (err) {
         if (!ignore) {
           const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-          console.error('Error al cargar los anuncios:', errorMessage);
           setError(errorMessage);
         }
       } finally {
@@ -198,13 +197,16 @@ const AnnouncementContent = () => {
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-      console.error('Error al reaccionar:', errorMessage);
     }
   };
 
   // Maneja el envío de un nuevo comentario
   const handleAddComment = async (announcementId: number) => {
-    if (!newComment.trim()) return;
+    const commentText = newComment.trim();
+    
+    if (!commentText) {
+      return;
+    }
 
     try {
       const token = getAuthToken();
@@ -214,14 +216,14 @@ const AnnouncementContent = () => {
         throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
       }
 
-      const response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/announcements/${announcementId}/comments`, {
+      const response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/announcements/${announcementId}/comment`, {
         method: 'POST',
         headers: {
           'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({ comment: newComment })
+        body: JSON.stringify({ content: commentText })
       });
 
       if (!response.ok) {
@@ -234,7 +236,7 @@ const AnnouncementContent = () => {
       setAnnouncements(prevAnnouncements => 
         prevAnnouncements.map(announcement => {
           if (announcement.id === announcementId) {
-        return {
+            return {
               ...announcement,
               comments: [...announcement.comments, data.comment]
             };
@@ -247,7 +249,6 @@ const AnnouncementContent = () => {
       setNewComment("");
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-      console.error('Error al comentar:', errorMessage);
     }
   };
 
@@ -394,7 +395,7 @@ const AnnouncementContent = () => {
                   </div>
                   <div className="bg-[#eab308] p-0.5 rounded-full -ml-1">
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+                      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1-2-2h3"></path>
                     </svg>
                   </div>
                     <span className="text-white text-xs ml-1.5">{announcement.reactions_count}</span>
@@ -416,7 +417,7 @@ const AnnouncementContent = () => {
                   onClick={() => handleAnnouncementReaction(announcement.id)}
                 >
                 <svg width="18" height="18" viewBox="0 0 24 24" className="mr-2">
-                    <path fill={announcement.user_reacted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+                    <path fill={announcement.user_reacted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1-2-2h3"></path>
                 </svg>
                 <span className="text-sm">Reaccionar</span>
               </button>

@@ -139,7 +139,6 @@ export default function Campaign() {
         setError(null);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-        console.error('Error al cargar los datos de la campaña:', errorMessage);
         setError(errorMessage);
       } finally {
         setLoading(false);

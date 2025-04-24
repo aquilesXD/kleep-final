@@ -176,7 +176,6 @@ const ProfileBalance = () => {
         setTiktokAccounts([]);
       }
     } catch (error: any) {
-      console.error('Error al obtener cuentas de TikTok:', error);
       if (error.response && error.response.status === 401) {
         setAccountsError('No autorizado. Verifica tu sesión.');
       } else if (error.response && error.response.status >= 500) {
@@ -218,7 +217,6 @@ const ProfileBalance = () => {
         setUnverifiedAccounts([]);
       }
     } catch (error: any) {
-      console.error('Error al obtener cuentas de TikTok no verificadas:', error);
       if (error.response && error.response.status === 401) {
         setUnverifiedAccountsError('No autorizado. Verifica tu sesión.');
       } else if (error.response && error.response.status >= 500) {
@@ -287,7 +285,6 @@ const ProfileBalance = () => {
           'Content-Type': 'application/json'
         }
       }).catch(err => {
-        console.warn('No se pudieron obtener las campañas, usando datos de ejemplo:', err);
         // Devolver respuesta simulada si falla la petición
         return new Response(JSON.stringify({
           success: true,
@@ -427,7 +424,8 @@ const ProfileBalance = () => {
       videosList = videosList.filter((video: Video) => video.creator === userEmail);
 
       if (videosList.length === 0) {
-        console.log("No se encontraron videos asociados al usuario logueado");
+        // Eliminar console.log
+        // console.log("No se encontraron videos asociados al usuario logueado");
       }
       
       // Actualizar el estado con la lista de videos procesada
@@ -494,7 +492,8 @@ const ProfileBalance = () => {
         setDeposits(balanceData.deposits)
       }
     } catch (error: any) {
-      console.error('Error:', error)
+      // Eliminar console.error
+      // console.error('Error:', error)
       setError(`No se pudieron cargar los datos: ${error.message}`)
     } finally {
       setIsLoading(false)

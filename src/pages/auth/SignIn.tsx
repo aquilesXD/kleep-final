@@ -174,7 +174,8 @@ export default function LoginForm() {
     }
   };
 
-  const handleSendCode = async () => {
+  const handleSignIn = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!isValidEmail) {
       setErrorMessage("Por favor ingresa un correo electrónico válido");
       return;
@@ -184,9 +185,6 @@ export default function LoginForm() {
     setErrorMessage(null);
 
     try {
-      // Mostrar mensaje de espera
-      console.log("Procesando solicitud para:", email);
-      
       // Limpiar cualquier timeout existente
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
@@ -208,7 +206,6 @@ export default function LoginForm() {
           }
 
           const data = await response.json();
-          console.log("Código enviado exitosamente:", data);
           
           // Guardar datos importantes
           localStorage.setItem("userEmail", email);
@@ -223,7 +220,6 @@ export default function LoginForm() {
           }, 1000);
           
         } catch (error: any) {
-          console.error("Error completo:", error);
           setStatus("error");
           setErrorMessage(`Error al enviar el código: ${error.message}`);
         }
@@ -255,10 +251,7 @@ export default function LoginForm() {
         </div>
 
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSendCode();
-          }}
+          onSubmit={handleSignIn}
         >
           <div className="mb-5 relative">
             <div className="relative">
@@ -291,6 +284,12 @@ export default function LoginForm() {
             {isLoading ? "Cargando..." : 
              isSuccess ? "Código enviado ✓" : "Continuar"}
           </button>
+          
+          <div className="mt-4 text-center">
+            <p className="text-[#aaa]">
+              ¿No tienes una cuenta? <Link to="/signup" className="text-[#a78bfa] hover:text-[#c4b5fd] font-medium">Regístrate aqui</Link>
+            </p>
+          </div>
         </form>
         
       </div>

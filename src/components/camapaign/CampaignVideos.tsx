@@ -119,7 +119,6 @@ export default function CampaignVideos() {
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-      console.error('Error al cargar los videos:', errorMessage);
       setError(errorMessage);
     } finally {
       setLoading(false);

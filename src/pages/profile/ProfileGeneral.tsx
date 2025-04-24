@@ -1,17 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
 // Definir interfaces para el tipado estricto
 interface UserProfile {
   email: string;
   name: string;
-  username?: string;
-  biography?: string;
-  age?: number | null;
-  country?: string;
-  city?: string;
-  phone?: string;
-  profile_picture?: string;
+  username: string;
+  age: number | null;
+  profile_picture: string;
 }
 
 interface ProfileErrors {
@@ -31,12 +27,8 @@ const ProfileGeneral: React.FC = () => {
     email: '',
     name: '',
     username: '',
-    biography: '',
     age: null,
-    country: '',
-    city: '',
-    phone: '',
-    profile_picture: undefined
+    profile_picture: ''
   });
   
   // Estado para la nueva imagen de perfil
@@ -46,10 +38,9 @@ const ProfileGeneral: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Estados de UI
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string>('');
-  const [success, setSuccess] = useState<string>('');
-  const [isCreating, setIsCreating] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [errors, setErrors] = useState<ProfileErrors>({});
   const [activeTab, setActiveTab] = useState<'view' | 'edit'>('view');
   
@@ -61,13 +52,14 @@ const ProfileGeneral: React.FC = () => {
       profile.name.trim() !== '' &&
       profile.name.length >= 2 &&
       (!profile.username || profile.username.length >= 3) &&
-      (profile.age === null || profile.age === undefined || (profile.age >= 0 && profile.age <= 120)) &&
-      (!newProfilePicture || (newProfilePicture.size <= 2 * 1024 * 1024 && ['image/jpeg', 'image/png', 'image/gif'].includes(newProfilePicture.type)))
+      (profile.age === null || (profile.age >= 0 && profile.age <= 120)) &&
+      (!newProfilePicture || (newProfilePicture.size <= 2 * 1024 * 1024 && 
+        ['image/jpeg', 'image/png', 'image/gif'].includes(newProfilePicture.type)))
     );
   };
 
   // Función para obtener el perfil del usuario
-  const fetchUserProfile = useCallback(async () => {
+  const fetchUserProfile = async () => {
     setLoading(true);
     setError('');
 
@@ -77,7 +69,7 @@ const ProfileGeneral: React.FC = () => {
         throw new Error('No se encontró el token de autenticación');
       }
 
-      const response = await axios.get(`${API_ENDPOINT}`, {
+      const response = await axios.get(API_ENDPOINT, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -86,15 +78,11 @@ const ProfileGeneral: React.FC = () => {
       if (response.data.success) {
         const userData = response.data.user;
         setProfile({
-          email: userData.email,
-          name: userData.name,
-          username: userData.username,
-          biography: userData.biography,
-          age: userData.age,
-          country: userData.country,
-          city: userData.city || '',
-          phone: userData.phone || '',
-          profile_picture: userData.profile_image,
+          email: userData.email || '',
+          name: userData.name || '',
+          username: userData.username || '',
+          age: userData.age !== undefined ? userData.age : null,
+          profile_picture: userData.profile_image || '',
         });
       } else {
         setError('No se pudieron cargar los datos del perfil.');
@@ -104,7 +92,7 @@ const ProfileGeneral: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
   // Validar campos
   const validateFields = (): boolean => {
@@ -130,18 +118,16 @@ const ProfileGeneral: React.FC = () => {
     }
     
     // Validar edad
-    if (profile.age !== null && profile.age !== undefined && (profile.age < 0 || profile.age > 120)) {
+    if (profile.age !== null && (profile.age < 0 || profile.age > 120)) {
       newErrors.age = 'La edad debe estar entre 0 y 120 años';
     }
     
     // Validar imagen de perfil
     if (newProfilePicture) {
-      // Validar tamaño (máximo 2MB)
       if (newProfilePicture.size > 2 * 1024 * 1024) {
         newErrors.profilePicture = 'La imagen no debe superar los 2MB';
       }
       
-      // Validar tipo de archivo
       const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
       if (!validTypes.includes(newProfilePicture.type)) {
         newErrors.profilePicture = 'Formato no válido. Use JPG, PNG o GIF';
@@ -152,46 +138,21 @@ const ProfileGeneral: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
   
-  // Función para actualizar de forma inmutable campos específicos del perfil
-  const updateProfile = (field: keyof UserProfile, value: any) => {
-    setProfile(prevProfile => ({
-      ...prevProfile,
+  // Función para actualizar campos del perfil
+  const handleInputChange = (field: keyof UserProfile, value: any) => {
+    setProfile(prev => ({
+      ...prev,
       [field]: value
     }));
-  };
-  
-  // Manejadores de cambios en los inputs
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    updateProfile('email', e.target.value);
-  };
-  
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    updateProfile('name', e.target.value);
-  };
-  
-  const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    updateProfile('username', e.target.value);
-  };
-  
-  const handleBiographyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    updateProfile('biography', e.target.value);
-  };
-  
-  const handleAgeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value === '' ? null : Number(e.target.value);
-    updateProfile('age', value);
-  };
-  
-  const handleCountryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    updateProfile('country', e.target.value);
-  };
-  
-  const handleCityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    updateProfile('city', e.target.value);
-  };
-  
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    updateProfile('phone', e.target.value);
+    
+    // Limpiar errores al editar
+    if (errors[field as keyof ProfileErrors]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field as keyof ProfileErrors];
+        return newErrors;
+      });
+    }
   };
   
   // Función para manejar el cambio de imagen de perfil
@@ -200,7 +161,7 @@ const ProfileGeneral: React.FC = () => {
       const file = e.target.files[0];
       setNewProfilePicture(file);
       
-      // Verificar el tipo de archivo y tamaño antes de procesarlo
+      // Verificar el tipo de archivo y tamaño
       const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
       if (!validTypes.includes(file.type)) {
         setErrors(prev => ({
@@ -223,18 +184,12 @@ const ProfileGeneral: React.FC = () => {
       reader.onload = (event) => {
         if (event.target && event.target.result) {
           const dataUrl = event.target.result as string;
-          
-          // Actualizar el perfil con la Data URL de la imagen
-          setProfile(prevProfile => ({
-            ...prevProfile,
-            profile_picture: dataUrl
-          }));
-          
-          // Limpiar errores de imagen si todo está correcto
-          setErrors(prev => ({
-            ...prev,
-            profilePicture: undefined
-          }));
+          handleInputChange('profile_picture', dataUrl);
+          setErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors.profilePicture;
+            return newErrors;
+          });
         }
       };
       
@@ -245,16 +200,13 @@ const ProfileGeneral: React.FC = () => {
         }));
       };
       
-      // Iniciar la lectura del archivo como Data URL (base64)
       reader.readAsDataURL(file);
     }
   };
   
   // Función para abrir el selector de archivos
   const triggerFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
+    fileInputRef.current?.click();
   };
   
   // Función para guardar el perfil actualizado
@@ -274,36 +226,15 @@ const ProfileGeneral: React.FC = () => {
         throw new Error('No se encontró el token de autenticación');
       }
 
-      // Crear objeto JSON para la solicitud
-      const userData: {
-        name: string;
-        phone?: string;
-        country?: string;
-        city?: string;
-        profile_picture?: string;
-        profile_image?: string;
-      } = {
+      // Crear objeto para la solicitud
+      const userData = {
         name: profile.name,
-        phone: profile.phone || undefined,
-        country: profile.country || undefined,
-        city: profile.city || undefined
+        username: profile.username,
+        age: profile.age,
+        profile_image: profile.profile_picture
       };
-      
-      // Si hay una imagen de perfil, usamos su URL
-      if (profile.profile_picture) {
-        userData.profile_picture = profile.profile_picture;
-      }
 
-      // Adaptar el nombre del campo si es necesario
-      if (userData && userData.profile_picture) {
-        userData.profile_image = userData.profile_picture;
-        delete userData.profile_picture; // Eliminamos el campo que no necesita la API
-      }
-
-      // Log para depuración
-      console.log('Enviando datos:', userData);
-
-      const response = await axios.put(`${API_ENDPOINT}`, userData, {
+      const response = await axios.put(API_ENDPOINT, userData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -312,14 +243,13 @@ const ProfileGeneral: React.FC = () => {
 
       if (response.data.success) {
         setSuccess('¡Perfil actualizado exitosamente!');
-        setTimeout(() => setSuccess(''), 3000); // Limpia el mensaje después de 3 segundos
-        setNewProfilePicture(null); // Limpiar la referencia a la nueva imagen
-        fetchUserProfile(); // Recargar el perfil actualizado
+        setTimeout(() => setSuccess(''), 3000);
+        setNewProfilePicture(null);
+        fetchUserProfile();
       } else {
         setError(response.data.message || 'No se pudo actualizar el perfil.');
       }
     } catch (error: any) {
-      console.error('Error al actualizar el perfil:', error);
       setError(error.response?.data?.message || 'Error al actualizar el perfil.');
     } finally {
       setLoading(false);
@@ -329,31 +259,22 @@ const ProfileGeneral: React.FC = () => {
   // Cargar el perfil al montar el componente
   useEffect(() => {
     fetchUserProfile();
-  }, [fetchUserProfile]);
+  }, []);
 
-  // Renderizar la imagen de perfil optimizada
+  // Renderizar la imagen de perfil
   const renderProfileImage = () => {
-    if (newProfilePicture) {
-      return (
-        <img 
-          src={URL.createObjectURL(newProfilePicture)} 
-          alt="Foto de perfil" 
-          className="w-full h-full object-cover"
-        />
-      );
-    } else if (profile.profile_picture) {
+    if (profile.profile_picture) {
       return (
         <img 
           src={profile.profile_picture}
           alt="Foto de perfil" 
           className="w-full h-full object-cover"
-          key={profile.profile_picture}
         />
       );
     } else {
       return (
         <div className="text-3xl text-gray-500">
-          {profile.name && profile.name.trim() !== '' ? profile.name.charAt(0).toUpperCase() : '?'}
+          {profile.name ? profile.name.charAt(0).toUpperCase() : '?'}
         </div>
       );
     }
@@ -371,7 +292,7 @@ const ProfileGeneral: React.FC = () => {
             activeTab === 'view' ? 'bg-[#8e4dff] text-white' : 'bg-[#1c1c1c] text-white-400'
           }`}
         >
-        Información Básica
+          Información Básica
         </button>
         <button
           onClick={() => setActiveTab('edit')}
@@ -383,10 +304,17 @@ const ProfileGeneral: React.FC = () => {
         </button>
       </div>
 
-      {/* Contenido de las tabs */}
+      {/* Vista de información */}
       {activeTab === 'view' && (
         <div>
           <h3 className="text-lg font-medium mb-4">Información Básica</h3>
+
+          <div className="mb-6">
+            <label className="block text-sm text-gray-400 mb-1.5">Correo electrónico</label>
+            <div className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white">
+              {profile.email || 'No especificado'}
+            </div>
+          </div>
 
           <div className="mb-6">
             <label className="block text-sm text-gray-400 mb-1.5">Nombre</label>
@@ -396,42 +324,23 @@ const ProfileGeneral: React.FC = () => {
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-1.5">Teléfono</label>
+            <label className="block text-sm text-gray-400 mb-1.5">Nombre de usuario</label>
             <div className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white">
-              {profile.phone || 'No especificado'}
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-1.5">País</label>
-            <div className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white">
-              {profile.country || 'No especificado'}
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-1.5">Ciudad</label>
-            <div className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white">
-              {profile.city || 'No especificado'}
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-1.5">Biografía</label>
-            <div className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white">
-              {profile.biography || 'No especificado'}
+              {profile.username || 'No especificado'}
             </div>
           </div>
 
           <div className="mb-6">
             <label className="block text-sm text-gray-400 mb-1.5">Edad</label>
             <div className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white">
-              {profile.age !== null && profile.age !== undefined ? profile.age : 'No especificado'}
+              {profile.age !== null ? profile.age : 'No especificado'}
             </div>
           </div>
+
         </div>
       )}
 
+      {/* Formulario de edición */}
       {activeTab === 'edit' && (
         <div>
           <h3 className="text-lg font-medium mb-4">Actualizar Datos</h3>
@@ -447,7 +356,23 @@ const ProfileGeneral: React.FC = () => {
             </div>
           )}
 
-          {/* Sección de formulario ajustada para eliminar email, age y biography */}
+          <div className="mb-6">
+            <label className="block text-sm text-gray-400 mb-1.5">Correo electrónico <span className="text-red-500">*</span></label>
+            <input
+              className={`w-full p-2.5 bg-[#101010] border ${errors.email ? 'border-red-500' : 'border-[#1c1c1c]'} rounded-md text-white focus:outline-none focus:border-[#272727]`}
+              placeholder="Correo electrónico"
+              type="email"
+              value={profile.email}
+              onChange={(e) => handleInputChange('email', e.target.value)}
+              disabled
+              required
+            />
+            {errors.email && (
+              <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+            )}
+            <p className="text-gray-500 text-xs mt-1">El correo electrónico no se puede modificar</p>
+          </div>
+
           <div className="mb-6">
             <label className="block text-sm text-gray-400 mb-1.5">Nombre <span className="text-red-500">*</span></label>
             <input
@@ -455,7 +380,7 @@ const ProfileGeneral: React.FC = () => {
               placeholder="Nombre completo"
               type="text"
               value={profile.name}
-              onChange={(e) => updateProfile('name', e.target.value)}
+              onChange={(e) => handleInputChange('name', e.target.value)}
               required
             />
             {errors.name && (
@@ -464,36 +389,31 @@ const ProfileGeneral: React.FC = () => {
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-1.5">Teléfono</label>
+            <label className="block text-sm text-gray-400 mb-1.5">Nombre de usuario</label>
             <input
-              className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white focus:outline-none focus:border-[#272727]"
-              placeholder="Número de teléfono"
-              type="tel"
-              value={profile.phone || ''}
-              onChange={(e) => updateProfile('phone', e.target.value)}
+              className={`w-full p-2.5 bg-[#101010] border ${errors.username ? 'border-red-500' : 'border-[#1c1c1c]'} rounded-md text-white focus:outline-none focus:border-[#272727]`}
+              placeholder="Nombre de usuario"
+              type="text"
+              value={profile.username}
+              onChange={(e) => handleInputChange('username', e.target.value)}
             />
+            {errors.username && (
+              <p className="text-red-500 text-xs mt-1">{errors.username}</p>
+            )}
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-1.5">País</label>
+            <label className="block text-sm text-gray-400 mb-1.5">Edad</label>
             <input
-              className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white focus:outline-none focus:border-[#272727]"
-              placeholder="País"
-              type="text"
-              value={profile.country || ''}
-              onChange={(e) => updateProfile('country', e.target.value)}
+              className={`w-full p-2.5 bg-[#101010] border ${errors.age ? 'border-red-500' : 'border-[#1c1c1c]'} rounded-md text-white focus:outline-none focus:border-[#272727]`}
+              placeholder="Edad"
+              type="number"
+              value={profile.age !== null ? profile.age : ''}
+              onChange={(e) => handleInputChange('age', e.target.value === '' ? null : Number(e.target.value))}
             />
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-1.5">Ciudad</label>
-            <input
-              className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white focus:outline-none focus:border-[#272727]"
-              placeholder="Ciudad"
-              type="text"
-              value={profile.city || ''}
-              onChange={(e) => updateProfile('city', e.target.value)}
-            />
+            {errors.age && (
+              <p className="text-red-500 text-xs mt-1">{errors.age}</p>
+            )}
           </div>
 
           {/* Sección de foto de perfil */}

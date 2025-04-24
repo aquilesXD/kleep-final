@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { CampaignSidebar } from "../layout/CampainSidebar";
 import Sidebar from "../layout/Sidebar";
@@ -68,91 +68,85 @@ export default function CampaignRewards() {
   const navigate = useNavigate();
 
   // Obtener los datos de recompensas
-  useEffect(() => {
+  const fetchRewards = useCallback(async () => {
     let ignore = false;
     
-    const fetchRewards = async () => {
-      try {
-        setLoading(true);
-        setIsAuthError(false);
-        
-        // Obtener el token mediante la función getAuthToken
-        const token = getAuthToken();
-        
-        // Verificar que haya un token válido
-        if (!token) {
-          setIsAuthError(true);
-          throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
+    try {
+      setLoading(true);
+      setIsAuthError(false);
+      
+      // Obtener el token mediante la función getAuthToken
+      const token = getAuthToken();
+      
+      // Verificar que haya un token válido
+      if (!token) {
+        setIsAuthError(true);
+        throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
+      }
+      
+      // Intentar hacer la petición con el formato Bearer
+      let response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/rewards`, {
+        headers: {
+          'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
-        
-        // Intentar hacer la petición con el formato Bearer
-        let response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/rewards`, {
+      });
+
+      // Si el error es 401 (No autorizado), intentar con formatos alternativos
+      if (response.status === 401) {
+        // Intentar con formato alternativo (solo token sin Bearer)
+        response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/rewards`, {
           headers: {
-            'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
+            'Authorization': token,
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           }
         });
-
-        // Si el error es 401 (No autorizado), intentar con formatos alternativos
+        
+        // Si sigue fallando, intentar con query param
         if (response.status === 401) {
-          // Intentar con formato alternativo (solo token sin Bearer)
-          response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/rewards`, {
+          response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/rewards?api_token=${token}`, {
             headers: {
-              'Authorization': token,
               'Content-Type': 'application/json',
               'Accept': 'application/json'
             }
           });
           
-          // Si sigue fallando, intentar con query param
+          // Si sigue fallando, es un problema de autenticación real
           if (response.status === 401) {
-            response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/rewards?api_token=${token}`, {
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              }
-            });
-            
-            // Si sigue fallando, es un problema de autenticación real
-            if (response.status === 401) {
-              setIsAuthError(true);
-              throw new Error('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
-            }
+            setIsAuthError(true);
+            throw new Error('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
           }
         }
-
-        if (!response.ok) {
-          throw new Error(`Error al cargar las recompensas (${response.status})`);
-        }
-
-        const data = await response.json();
-        
-        // Verificar si debemos ignorar esta respuesta (componente desmontado)
-        if (!ignore) {
-          setRewardsData(data);
-          setError(null);
-        }
-      } catch (err) {
-        if (!ignore) {
-          const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-          console.error('Error al cargar las recompensas:', errorMessage);
-          setError(errorMessage);
-        }
-      } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
       }
-    };
 
-    fetchRewards();
-    
-    // Limpieza al desmontar el componente
-    return () => {
-      ignore = true;
-    };
+      if (!response.ok) {
+        throw new Error(`Error al cargar las recompensas (${response.status})`);
+      }
+
+      const data = await response.json();
+      
+      // Verificar si debemos ignorar esta respuesta (componente desmontado)
+      if (!ignore) {
+        setRewardsData(data);
+        setError(null);
+      }
+    } catch (err) {
+      if (!ignore) {
+        const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+        setError(errorMessage);
+      }
+    } finally {
+      if (!ignore) {
+        setLoading(false);
+      }
+    }
   }, [campaignId]);
+
+  useEffect(() => {
+    fetchRewards();
+  }, [fetchRewards]);
 
   // Ajustar el manejo de errores para capturar la respuesta completa del servidor
   const handleSubmit = async () => {
@@ -181,8 +175,6 @@ export default function CampaignRewards() {
         tiktok_account_id: tiktokAccountId
       };
 
-      console.log('Datos enviados:', videoData); // Log para depuración
-
       // Hacer la petición para enviar el video
       const response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/submit-video`, {
         method: 'POST',
@@ -196,7 +188,6 @@ export default function CampaignRewards() {
 
       // Capturar la respuesta completa para depuración
       const responseText = await response.text();
-      console.log('Respuesta completa del servidor:', responseText);
 
       // Si el error es 403 (Prohibido), mostrar un mensaje claro
       if (response.status === 403) {
@@ -209,8 +200,6 @@ export default function CampaignRewards() {
 
       const data = JSON.parse(responseText);
 
-      console.log('Respuesta del servidor (JSON):', data); // Log para depuración
-
       if (data.success) {
         toast.success("¡Video enviado correctamente! Tu participación en la campaña ha sido registrada.");
         setVideoLink("");
@@ -221,7 +210,6 @@ export default function CampaignRewards() {
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-      console.error('Error al enviar el video:', errorMessage);
       toast.error(`Error: ${errorMessage}`);
     } finally {
       setSubmitting(false);

@@ -75,6 +75,13 @@ const getNotificationIcon = (type: string) => {
   }
 };
 
+// Función para verificar si el usuario está autenticado
+const isUserAuthenticated = (): boolean => {
+  const token = getAuthToken();
+  const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
+  return !!token || isAuthenticated;
+};
+
 export function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [groupedNotifications, setGroupedNotifications] = useState<{[key: string]: Notification[]}>({});
@@ -87,22 +94,39 @@ export function NotificationsPage() {
 
   // Verificar si el usuario está autenticado al cargar la página
   useEffect(() => {
-    const token = getAuthToken();
-    if (!token) {
+    if (!isUserAuthenticated()) {
       // Si no hay token, redirigir al usuario inmediatamente
-      navigate('/campaign-home');
+      navigate('/signin');
+      return;
     }
+
+    // Verificar periódicamente si el usuario sigue autenticado
+    const checkInterval = setInterval(() => {
+      if (!isUserAuthenticated()) {
+        navigate('/signin');
+        clearInterval(checkInterval);
+      }
+    }, 2000);
+
+    return () => clearInterval(checkInterval);
   }, [navigate]);
 
-  // Función para obtener el número de notificaciones no leídas
+  // Obtener conteo de notificaciones no leídas
   const fetchUnreadCount = useCallback(async () => {
+    // No hacer nada si el usuario no está autenticado
+    if (!isUserAuthenticated()) {
+      setUnreadCount(0);
+      return;
+    }
+
     try {
       // Obtener el token mediante la función getAuthToken
       const token = getAuthToken();
       
       // Verificar que haya un token válido
       if (!token) {
-        return; // Si no hay token, simplemente salimos sin mostrar error
+        setUnreadCount(0);
+        return;
       }
       
       // Intentar hacer la petición con el formato Bearer
@@ -142,7 +166,6 @@ export function NotificationsPage() {
       }
 
       if (!response.ok) {
-        console.error(`Error al obtener notificaciones no leídas (${response.status})`);
         return;
       }
 
@@ -152,7 +175,6 @@ export function NotificationsPage() {
         setUnreadCount(data.unread_count);
       }
     } catch (err) {
-      console.error('Error al obtener conteo de notificaciones:', err);
     }
   }, []);
 
@@ -160,10 +182,29 @@ export function NotificationsPage() {
   useEffect(() => {
     let ignore = false;
     
+    // No hacer nada si el usuario no está autenticado
+    if (!isUserAuthenticated()) {
+      if (!ignore) {
+        setLoading(false);
+        setNotifications([]);
+        setGroupedNotifications({});
+        setUnreadCount(0);
+      }
+      return;
+    }
+    
     const fetchNotifications = async () => {
       try {
         setLoading(true);
         setIsAuthError(false);
+        
+        // Comprobar autenticación nuevamente
+        if (!isUserAuthenticated()) {
+          setIsAuthError(true);
+          setLoading(false);
+          navigate('/signin');
+          return;
+        }
         
         // Obtener el token mediante la función getAuthToken
         const token = getAuthToken();
@@ -173,7 +214,7 @@ export function NotificationsPage() {
           setIsAuthError(true);
           setLoading(false);
           setError('No se encontró un token de autenticación. Por favor, inicia sesión.');
-          return; // Detenemos la ejecución aquí para evitar llamadas a la API sin token
+          return;
         }
         
         // Intentar hacer la petición con el formato Bearer
@@ -276,8 +317,14 @@ export function NotificationsPage() {
     setGroupedNotifications(grouped);
   }, [notifications]);
 
-  // Marcar todas las notificaciones como leídas
+  // Función para marcar todas las notificaciones como leídas
   const handleMarkAllAsRead = useCallback(async () => {
+    // No hacer nada si el usuario no está autenticado
+    if (!isUserAuthenticated()) {
+      navigate('/signin');
+      return;
+    }
+    
     try {
       // Obtener el token mediante la función getAuthToken
       const token = getAuthToken();
@@ -285,15 +332,16 @@ export function NotificationsPage() {
       // Verificar que haya un token válido
       if (!token) {
         setIsAuthError(true);
-        throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
+        navigate('/signin');
+        return;
       }
 
       // Mostrar feedback mientras se procesa
       setShowReadFeedback(true);
 
       // Llamar a la API para marcar todas las notificaciones como leídas
-      const response = await fetch(`https://contabl.net/kleep/api/v1/notifications/mark-all-read`, {
-        method: 'PUT', // Cambiado de POST a PUT
+      const response = await fetch(`https://contabl.net/kleep/api/notifications/1/read`, {
+        method: 'PUT',
         headers: {
           'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -320,13 +368,20 @@ export function NotificationsPage() {
       console.error('Error al marcar notificaciones como leídas:', errorMessage);
       setShowReadFeedback(false);
       
-      // Mostrar error al usuario
-      alert(`Error: ${errorMessage}`);
+      // Quitar el mensaje de alerta y simplemente ocultar el feedback
+      setError('No se pudieron marcar las notificaciones como leídas. Inténtalo de nuevo más tarde.');
+      setTimeout(() => setError(null), 3000);
     }
-  }, []);
+  }, [navigate]);
 
   // Marcar una notificación como leída
   const handleMarkAsRead = useCallback(async (id: number) => {
+    // No hacer nada si el usuario no está autenticado
+    if (!isUserAuthenticated()) {
+      navigate('/signin');
+      return;
+    }
+    
     try {
       // Obtener el token mediante la función getAuthToken
       const token = getAuthToken();
@@ -334,7 +389,8 @@ export function NotificationsPage() {
       // Verificar que haya un token válido
       if (!token) {
         setIsAuthError(true);
-        throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
+        navigate('/signin');
+        return;
       }
 
       // Llamar a la API para marcar la notificación como leída usando el endpoint correcto

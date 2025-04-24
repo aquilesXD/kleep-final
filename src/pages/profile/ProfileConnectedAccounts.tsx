@@ -274,7 +274,7 @@ const ProfileConnectedAccounts = () => {
 
                 // Notificar al usuario sobre la verificación exitosa
                 setTimeout(() => {
-                  alert(`¡La cuenta ${newAccounts[index].username} ha sido verificada exitosamente!`);
+                  handleSuccessfulVerification(newAccounts[index], index);
                 }, 500);
               }
             }
@@ -287,6 +287,12 @@ const ProfileConnectedAccounts = () => {
     } finally {
       setIsCheckingStatus(false);
     }
+  };
+
+  // Manejo de la verificación exitosa y respuesta
+  const handleSuccessfulVerification = (account: TikTokAccount, index: number) => {
+    // Mostrar mensaje de éxito y actualizar UI
+    toast.success(`¡La cuenta ${account.username} ha sido verificada exitosamente!`);
   };
 
   // Iniciar proceso de verificación
@@ -388,7 +394,6 @@ const ProfileConnectedAccounts = () => {
 
     // Guardar el código de verificación original antes de hacer cualquier petición
     const originalVerificationCode = verificationCode;
-    console.log(`Código de verificación original antes de petición: ${originalVerificationCode}`);
 
     // Verificar tiempo mínimo entre verificaciones
     const now = new Date().getTime();
@@ -441,15 +446,12 @@ const ProfileConnectedAccounts = () => {
             tiktokUsername
           );
           
-          // IMPORTANTE: NO actualizar el código de verificación con el recibido del backend
-          // Si la respuesta contiene un código diferente, ignorarlo y mantener el original
-          if (result.account?.tiktok_code && result.account.tiktok_code !== originalVerificationCode) {
-            console.log(`El backend envió un código diferente (${result.account.tiktok_code}), pero mantenemos el original (${originalVerificationCode})`);
+          // Verificar si el código recibido es diferente al original
+          if (result.account && result.account.tiktok_code && result.account.tiktok_code !== originalVerificationCode) {
           }
         } catch (verificationError: any) {
           // Si hay un error 422, intentar con el método alternativo
           if (verificationError.message && verificationError.message.includes('422')) {
-            console.log('Intentando método alternativo debido a error 422');
             // Intentar con el método alternativo requestTikTokAccountVerification
             const alternativeResult = await tiktokVerificationService.requestTikTokAccountVerification(
               tiktokUsername,
@@ -465,9 +467,8 @@ const ProfileConnectedAccounts = () => {
                 isVerified: false
               };
               
-              // IMPORTANTE: Seguir manteniendo el código original aunque el servidor envíe uno nuevo
+              // Verificar si el código recibido es diferente al original
               if (alternativeResult.verification_code && alternativeResult.verification_code !== originalVerificationCode) {
-                console.log(`El backend envió un código diferente (${alternativeResult.verification_code}), pero mantenemos el original (${originalVerificationCode})`);
               }
             } else {
               throw verificationError; // Re-lanzar el error original si el alternativo también falla
@@ -535,7 +536,6 @@ const ProfileConnectedAccounts = () => {
         }
         
         setStatusMessage(errorMessage);
-        console.error('Error 422 en verificación:', error.message);
         return;
       }
       
@@ -677,7 +677,6 @@ const ProfileConnectedAccounts = () => {
       if (result.success && result.account) {
         // Obtener el código de verificación recibido del backend
         const receivedCode = result.verification_code || result.account.tiktok_code || "";
-        console.log(`Código de verificación recibido del backend: ${receivedCode}`);
         
         if (!receivedCode) {
           throw new Error('No se recibió un código de verificación válido del servidor.');
@@ -939,7 +938,6 @@ const ProfileConnectedAccounts = () => {
                       await navigator.clipboard.writeText(verificationCode);
                       toast.success('Código copiado al portapapeles');
                     } catch (err) {
-                      console.error("Error al copiar:", err);
                       toast.error('No se pudo copiar el código.');
                     }
                   }}
