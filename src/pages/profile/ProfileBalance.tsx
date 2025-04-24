@@ -17,6 +17,7 @@ interface Video {
   id: string
   title: string
   campaign: string
+  campaign_id?: number | null
   creator: string
   video_link: string
   views: number
@@ -55,11 +56,32 @@ interface TikTokAccount {
   rejection_reason?: string
 }
 
+// Interfaz para campañas según el formato de la API
+interface Campaign {
+  id: number;
+  name: string;
+  description: string;
+  type: string;
+  banner_image: string;
+  profile_image: string;
+  total_budget: string;
+  price_per_view: string;
+  platforms: string;
+  budget_spent: string;
+  created_at: string;
+  admin_name: string;
+  admin_profile_image: string;
+  joined_at: string;
+  budget_percentage: string;
+  is_joined: boolean;
+}
+
 const ProfileBalance = () => {
   // Estados principales
   const [email, setEmail] = useState<string | null>(null)
   const [videos, setVideos] = useState<Video[]>([])
   const [deposits, setDeposits] = useState<Deposit[]>([])
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [balance, setBalance] = useState<BalanceData>({
     total: 0,
     pending_videos: 0,
@@ -209,7 +231,7 @@ const ProfileBalance = () => {
     }
   }, []);
 
-  // Función principal para obtener datos de la API
+  // Función para obtener campañas y videos del usuario
   const fetchBalanceData = async () => {
     setIsLoading(true)
     setError(null)
@@ -256,6 +278,67 @@ const ProfileBalance = () => {
       // Parsear respuesta JSON de videos
       const videosData = await videosResponse.json()
 
+      // Obtener campañas a las que está unido el usuario
+      // Aquí cambiaríamos por el endpoint real de campañas cuando exista
+      const campaignsResponse = await fetch(`${API_BASE_URL}/campaigns/joined`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }).catch(err => {
+        console.warn('No se pudieron obtener las campañas, usando datos de ejemplo:', err);
+        // Devolver respuesta simulada si falla la petición
+        return new Response(JSON.stringify({
+          success: true,
+          campaigns: [
+            {
+              id: 2,
+              name: "Lanzamiento de Producto",
+              description: "Lanzamiento de nuevo producto al mercado",
+              type: "Lanzamiento",
+              banner_image: "https://picsum.photos/800/300?random=2",
+              profile_image: "https://randomuser.me/api/portraits/men/1.jpg",
+              total_budget: "8000.00",
+              price_per_view: "0.003000",
+              platforms: "TikTok",
+              budget_spent: "2500.00",
+              created_at: "2025-04-22 02:59:41",
+              admin_name: "Usuario Actualizado",
+              admin_profile_image: "https://randomuser.me/api/portraits/men/1.jpg",
+              joined_at: "2025-04-23 19:17:19",
+              budget_percentage: "31",
+              is_joined: true
+            },
+            {
+              id: 1,
+              name: "Campaña de Verano",
+              description: "Promoción de productos para el verano",
+              type: "Promocional",
+              banner_image: "https://picsum.photos/800/300?random=1",
+              profile_image: "https://randomuser.me/api/portraits/men/1.jpg",
+              total_budget: "5000.00",
+              price_per_view: "0.002000",
+              platforms: "TikTok",
+              budget_spent: "1200.00",
+              created_at: "2025-04-22 02:59:41",
+              admin_name: "Usuario Actualizado",
+              admin_profile_image: "https://randomuser.me/api/portraits/men/1.jpg",
+              joined_at: "2025-04-23 15:25:35",
+              budget_percentage: "24",
+              is_joined: true
+            }
+          ]
+        }));
+      });
+
+      const campaignsData = await campaignsResponse.json();
+      
+      // Guardar las campañas en el estado
+      if (campaignsData.success && campaignsData.campaigns) {
+        setCampaigns(campaignsData.campaigns);
+      }
+
       let videosList = [];
       
       // Procesar videos manteniendo los estados según vienen de la API dedicada
@@ -263,7 +346,8 @@ const ProfileBalance = () => {
         videosList = videosData.videos.map((item: any, index: number) => ({
           id: item.id || `video-${index}`,
           title: item.title || `Vídeo ${index + 1}`,
-          campaign: item.campaign || "Campaña estándar",
+          campaign: item.campaign || item.campaign_name || "Campaña estándar",
+          campaign_id: item.campaign_id || null,
           creator: item.creator || item.tiktok_username || "N/A",
           video_link: item.video_link || "#",
           views: item.views || 0,
@@ -277,7 +361,8 @@ const ProfileBalance = () => {
         videosList = balanceData.videos.map((item: any, index: number) => ({
           id: item.id || `video-${index}`,
           title: item.title || `Vídeo ${index + 1}`,
-          campaign: item.campaign || "Campaña estándar",
+          campaign: item.campaign || item.campaign_name || "Campaña estándar",
+          campaign_id: item.campaign_id || null,
           creator: item.creator || item.tiktok_username || "N/A",
           video_link: item.video_link || "#",
           views: item.views || 0,
@@ -294,7 +379,8 @@ const ProfileBalance = () => {
           {
             id: 'video-example-1',
             title: 'Video de ejemplo 1',
-            campaign: 'Campaña de demostración',
+            campaign: 'Lanzamiento de Producto',
+            campaign_id: 2,
             creator: 'usuario_tiktok1',
             video_link: 'https://www.tiktok.com/example1',
             views: 1500, // Menos de 2000 vistas
@@ -306,7 +392,8 @@ const ProfileBalance = () => {
           {
             id: 'video-example-2',
             title: 'Video de ejemplo 2',
-            campaign: 'Campaña de demostración',
+            campaign: 'Campaña de Verano',
+            campaign_id: 1,
             creator: 'usuario_tiktok2',
             video_link: 'https://www.tiktok.com/example2',
             views: 3500, // Más de 2000 vistas
@@ -318,7 +405,8 @@ const ProfileBalance = () => {
           {
             id: 'video-example-3',
             title: 'Video de ejemplo 3',
-            campaign: 'Campaña de demostración',
+            campaign: 'Lanzamiento de Producto',
+            campaign_id: 2,
             creator: 'usuario_tiktok3',
             video_link: 'https://www.tiktok.com/example3',
             views: 2100, // Más de 2000 vistas
@@ -344,6 +432,27 @@ const ProfileBalance = () => {
       
       // Actualizar el estado con la lista de videos procesada
       setVideos(videosList);
+
+      // Extraer las campañas únicas de los videos
+      const uniqueCampaigns = Array.from(new Set(videosList.map((video: Video) => video.campaign))) as string[];
+      setCampaigns(uniqueCampaigns.map((campaignName: string) => ({
+        id: 0,
+        name: campaignName,
+        description: '',
+        type: '',
+        banner_image: '',
+        profile_image: '',
+        total_budget: '',
+        price_per_view: '',
+        platforms: '',
+        budget_spent: '',
+        created_at: '',
+        admin_name: '',
+        admin_profile_image: '',
+        joined_at: '',
+        budget_percentage: '',
+        is_joined: false
+      })));
 
       // Calcular totales y balance
       let pendingVideos = 0;
@@ -419,8 +528,123 @@ const ProfileBalance = () => {
     navigate("/profile-cuentas")
   }
 
+  // Renderizado de contenido de pestaña de videos
+  const renderVideoContent = () => {
+    if (videos.length === 0) {
+      return (
+        <div className="bg-[#0c0c0c] border border-[#1c1c1c] rounded p-4 text-center text-white">
+          No hay videos disponibles para mostrar.
+        </div>
+      );
+    }
+
+    return (
+      <>
+        {/* Mostrar campañas individuales */}
+        {campaigns.map((campaign) => {
+          // Filtrar videos por campaña (por ID o por nombre si no hay ID)
+          const campaignVideos = videos.filter(
+            video => 
+              video.campaign_id === campaign.id || 
+              (video.campaign_id === null && video.campaign === campaign.name)
+          );
+          
+          // Si la campaña no tiene videos, no la mostramos
+          if (campaignVideos.length === 0) {
+            return null;
+          }
+          
+          return (
+            <div key={`campaign-${campaign.id}`} className="mb-8">
+              <div className="bg-[#0c0c0c] border border-[#1c1c1c] rounded-lg overflow-hidden mb-4">
+                {/* Banner de campaña */}
+                <div className="w-full h-32 relative">
+                  <img 
+                    src={campaign.banner_image} 
+                    alt={campaign.name}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-0 left-0 w-full bg-black bg-opacity-50 p-3 flex items-center">
+                    <img 
+                      src={campaign.profile_image} 
+                      alt={campaign.admin_name}
+                      className="w-12 h-12 rounded-full mr-3 border-2 border-white" 
+                    />
+                    <div>
+                      <h3 className="text-white text-lg font-bold">{campaign.name}</h3>
+                      <p className="text-gray-200 text-sm">{campaign.type}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Detalles de la campaña */}
+                <div className="p-4">
+                  <p className="text-gray-300 mb-3">{campaign.description}</p>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div>
+                      <p className="text-gray-500 text-sm">Presupuesto Total</p>
+                      <p className="text-white font-medium">${campaign.total_budget}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-sm">Gastado</p>
+                      <p className="text-white font-medium">${campaign.budget_spent}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-sm">Precio por Vista</p>
+                      <p className="text-white font-medium">${campaign.price_per_view}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-sm">Unido desde</p>
+                      <p className="text-white font-medium">{new Date(campaign.joined_at).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  
+                  {/* Barra de progreso del presupuesto */}
+                  <div className="w-full bg-gray-800 rounded-full h-2.5 mb-3">
+                    <div 
+                      className="bg-[#7c3aed] h-2.5 rounded-full" 
+                      style={{ width: `${campaign.budget_percentage}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-xs text-gray-400 mb-3">{campaign.budget_percentage}% del presupuesto utilizado</p>
+                </div>
+              </div>
+              
+              {/* Videos de la campaña */}
+              <h4 className="text-white font-medium mb-3">Videos para esta campaña</h4>
+              
+              {/* Vista de escritorio */}
+              <div className="hidden md:block bg-[#0c0c0c] border border-[#1c1c1c] rounded">
+                <table className="w-full">
+                  <thead className="border-b border-[#1c1c1c] text-left text-xs text-gray-500">
+                    <tr>
+                      <th className="px-4 py-3 text-left">CUENTAS</th>
+                      <th className="px-4 py-3 text-left">VIDEO</th>
+                      <th className="px-4 py-3 text-right">VISTAS</th>
+                      <th className="px-4 py-3 text-right">TOTAL A PAGAR</th>
+                      <th className="px-4 py-3 text-left">ESTADO</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-white">
+                    {campaignVideos.map((video, i) => renderVideoTableRow(video, i, false))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Vista móvil */}
+              <div className="md:hidden">
+                {campaignVideos.map((video, i) => renderMobileVideoCard(video, i, false))}
+              </div>
+            </div>
+          );
+        })}
+      </>
+    );
+  };
+
   // Renderizado de componentes
-  const renderVideoTableRow = (video: Video, index: number) => {
+  const renderVideoTableRow = (video: Video, index: number, showCampaign = true) => {
     // Determinar estilos de estado
     let statusStyle = ""
     let statusText = ""
@@ -464,7 +688,7 @@ const ProfileBalance = () => {
 
     return (
       <tr key={`video-row-${index}`} className="border-b border-[#1c1c1c]">
-        <td className="px-4 py-3">{video.campaign}</td>
+        {showCampaign && <td className="px-4 py-3">{video.campaign}</td>}
         <td className="px-4 py-3">
           <div className="flex flex-col">
             <span>{video.creator}</span>
@@ -515,7 +739,7 @@ const ProfileBalance = () => {
     )
   }
 
-  const renderMobileVideoCard = (video: Video, index: number) => {
+  const renderMobileVideoCard = (video: Video, index: number, showCampaign = true) => {
     // Estilos según el estado que viene directamente de la API
     let statusStyle = ""
     let statusText = ""
@@ -561,10 +785,12 @@ const ProfileBalance = () => {
         className="bg-[#0c0c0c] border border-[#1c1c1c] rounded-md p-3 mb-3"
       >
         <div className="grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <p className="text-gray-500">Campaña:</p>
-            <p className="text-white">{video.campaign}</p>
-          </div>
+          {showCampaign && (
+            <div>
+              <p className="text-gray-500">Campaña:</p>
+              <p className="text-white">{video.campaign}</p>
+            </div>
+          )}
           <div>
             <p className="text-gray-500">Creador:</p>
             <p className="text-white">{video.creator}</p>
@@ -676,43 +902,8 @@ const ProfileBalance = () => {
       {/* Contenido de pestañas */}
       {activeTab === "videos" && (
         <>
-          {/* Vista de escritorio */}
-          <div className="hidden md:block bg-[#0c0c0c] border border-[#1c1c1c] rounded">
-            <table className="w-full">
-              <thead className="border-b border-[#1c1c1c] text-left text-xs text-gray-500">
-                <tr>
-                  <th className="px-4 py-3 text-left">CAMPAÑA</th>
-                  <th className="px-4 py-3 text-left">CUENTAS</th>
-                  <th className="px-4 py-3 text-left">VIDEO</th>
-                  <th className="px-4 py-3 text-right">VISTAS</th>
-                  <th className="px-4 py-3 text-right">TOTAL A PAGAR</th>
-                  <th className="px-4 py-3 text-left">ESTADO</th>
-                </tr>
-              </thead>
-              <tbody className="text-white">
-                {videos.length > 0 ? (
-                  videos.map((video, i) => renderVideoTableRow(video, i))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-6 text-center">
-                      No hay videos disponibles para mostrar.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Vista móvil */}
-          <div className="md:hidden">
-            {videos.length > 0 ? (
-              videos.map((video, i) => renderMobileVideoCard(video, i))
-            ) : (
-              <div className="bg-[#0c0c0c] border border-[#1c1c1c] rounded p-4 text-center text-white">
-                No hay videos disponibles para mostrar.
-              </div>
-            )}
-          </div>
+          {/* Reemplazar la tabla de videos por la función renderVideoContent */}
+          {renderVideoContent()}
 
           {/* Sección de verificación de cuentas TikTok */}
           <div className="bg-[#0c0c0c] border border-[#1c1c1c] rounded-lg mt-8 mb-6 p-5">

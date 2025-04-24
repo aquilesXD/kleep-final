@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { LogoIcon } from '../../components/icons';
 import '../../components/ui/Form.css';
 import { toast } from 'react-hot-toast';
 
@@ -13,9 +14,10 @@ const SignUp: React.FC = () => {
   const [phone, setPhone] = useState<string>('');
   const [country, setCountry] = useState<string>('');
   const [city, setCity] = useState<string>('');
+  const [biography, setBiography] = useState<string>('');
+  const [age, setAge] = useState<number | ''>('');
   const [profilePicture, setProfilePicture] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [isValidEmail, setIsValidEmail] = useState<boolean>(false);
   const [isValidForm, setIsValidForm] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,10 +29,15 @@ const SignUp: React.FC = () => {
   // Verificar si el usuario ya está autenticado
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
-    if (isAuthenticated === 'true') {
+    const isVerified = localStorage.getItem('isVerified');
+    
+    // Si el usuario ya completó todo el proceso de registro, redirigir a campaign-home
+    if (isAuthenticated === 'true' && !isVerified) {
       navigate('/campaign-home');
     }
-
+    
+    // Solo usuarios verificados o nuevos deberían poder usar esta página
+    
     // Cargar el script de partículas si no está ya cargado
     if (typeof window !== "undefined" && !(window as any).particlesJS) {
       const script = document.createElement('script');
@@ -163,16 +170,18 @@ const SignUp: React.FC = () => {
     }
   }, [particlesScriptLoaded]);
 
-  // Validar formulario completo cuando cambian los campos
+  // Simplificar la validación del formulario
   useEffect(() => {
     setIsValidForm(
-      isValidEmail && 
       name.trim().length > 0 && 
-      phone.trim().length > 0 && 
-      country.trim().length > 0 && 
-      city.trim().length > 0
+      phone.trim().length > 0
     );
-  }, [isValidEmail, name, phone, country, city]);
+  }, [name, phone]);
+
+  // Actualizar la función de clases para los campos
+  const getInputClassName = (isValid: boolean) => {
+    return `w-full py-3 px-4 bg-[rgba(28,28,28,0.7)] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a78bfa] border ${isValid ? 'border-[rgba(75,75,75,0.5)]' : 'border-red-500'}`;
+  };
 
   // Función para manejar el cambio de nombre
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -198,16 +207,19 @@ const SignUp: React.FC = () => {
     setError(null);
   };
 
-  // Función para validar correo electrónico
-  const validateEmail = (email: string) => {
-    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return regex.test(email);
+  const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUsername(e.target.value);
+    setError(null);
   };
 
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBiographyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setBiography(e.target.value);
+    setError(null);
+  };
+
+  const handleAgeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setEmail(value);
-    setIsValidEmail(validateEmail(value));
+    setAge(value === '' ? '' : parseInt(value, 10));
     setError(null);
   };
 
@@ -235,14 +247,27 @@ const SignUp: React.FC = () => {
       headers.append('Authorization', `Bearer ${token}`);
     }
     
-    // Agregar Content-Type para los datos multipart
-    // Nota: No agregar Content-Type manualmente cuando se usa FormData,
-    // el navegador lo establece automáticamente con el boundary correcto
+    // Validar que los datos críticos no sean null o undefined antes de enviar
+    const formDataValidation = new FormData();
+    // Recorrer la FormData original y verificar cada valor
+    for (const [key, value] of userData.entries()) {
+      // Para campos de texto, asegurarse de que no sean null o undefined
+      if (value === null || value === undefined) {
+        // Usar cadena vacía en lugar de null/undefined para prevenir errores
+        formDataValidation.append(key, '');
+      } else if (typeof value === 'string' && value.trim() === '') {
+        // Si es una cadena vacía, asegurarse de que se envíe como cadena vacía
+        formDataValidation.append(key, '');
+      } else {
+        // Mantener el valor original
+        formDataValidation.append(key, value);
+      }
+    }
 
     const response = await fetch(API_USER_ENDPOINT, {
       method: 'POST',
       headers: headers,
-      body: userData,
+      body: formDataValidation, // Usar la FormData validada
     });
 
     const responseText = await response.text();
@@ -326,24 +351,42 @@ const SignUp: React.FC = () => {
         }
       }
 
-      // Limpiar datos
-      const cleanEmail = email.trim();
-      const cleanName = name.trim();
-      const cleanPhone = phone.trim().replace(/[^\d+\s]/g, '');
-      const cleanCountry = country.trim();
-      const cleanCity = city.trim();
+      // Limpiar datos - Usar el operador de coalescencia nula para prevenir valores null
+      const cleanEmail = email?.trim() ?? '';
+      const cleanName = name?.trim() ?? '';
+      const cleanPhone = phone?.trim().replace(/[^\d+\s]/g, '') ?? '';
+      const cleanCountry = country?.trim() ?? '';
+      const cleanCity = city?.trim() ?? '';
+      const cleanUsername = username?.trim() ?? '';
+      const cleanBiography = biography?.trim() ?? '';
+      // Convertir edad a string solo si tiene un valor numérico válido
+      const cleanAge = (typeof age === 'number' && !isNaN(age)) ? age.toString() : '';
 
       try {
         // INTENTO 1: Enviar datos como FormData (para archivos)
         const formData = new FormData();
-        formData.append('email', cleanEmail);
+        
+        // Añadir campos obligatorios, verificando que no sean null
         formData.append('name', cleanName);
         formData.append('phone', cleanPhone);
-        formData.append('country', cleanCountry);
-        formData.append('city', cleanCity);
         
-        if (profilePicture) {
+        // Añadir campos opcionales solo si tienen valor (no cadenas vacías)
+        if (cleanEmail) formData.append('email', cleanEmail);
+        if (cleanUsername) formData.append('username', cleanUsername);
+        if (cleanCountry) formData.append('country', cleanCountry);
+        if (cleanCity) formData.append('city', cleanCity);
+        if (cleanBiography) formData.append('biography', cleanBiography);
+        if (cleanAge) formData.append('age', cleanAge);
+        
+        // Solo añadir la imagen si existe
+        if (profilePicture && profilePicture instanceof File && profilePicture.size > 0) {
           formData.append('profile_picture', profilePicture);
+        }
+
+        // Verificar FormData antes de enviar (para depuración)
+        console.log('FormData a enviar:');
+        for (const [key, value] of formData.entries()) {
+          console.log(`${key}: ${value instanceof File ? `File (${value.name}, ${value.size} bytes)` : value}`);
         }
 
         // Llamar a la API de creación de usuario
@@ -351,9 +394,12 @@ const SignUp: React.FC = () => {
 
         handleSuccessfulRegistration(userResponse, {
           name: cleanName,
+          username: cleanUsername,
           phone: cleanPhone,
           country: cleanCountry,
           city: cleanCity,
+          biography: cleanBiography,
+          age: age,
           has_profile_picture: !!profilePicture
         });
       } catch (formDataError: any) {
@@ -363,13 +409,17 @@ const SignUp: React.FC = () => {
         if (formDataError.message && formDataError.message.includes('422')) {
           
           // INTENTO 2: Enviar datos como JSON (sin archivos)
-          const jsonData = {
-            email: cleanEmail,
-            name: cleanName,
-            phone: cleanPhone,
-            country: cleanCountry,
-            city: cleanCity
-          };
+          const jsonData: Record<string, string | number> = {};
+          
+          // Solo añadir campos con valores válidos
+          if (cleanName) jsonData.name = cleanName;
+          if (cleanPhone) jsonData.phone = cleanPhone;
+          if (cleanEmail) jsonData.email = cleanEmail;
+          if (cleanUsername) jsonData.username = cleanUsername;
+          if (cleanCountry) jsonData.country = cleanCountry;
+          if (cleanCity) jsonData.city = cleanCity;
+          if (cleanBiography) jsonData.biography = cleanBiography;
+          if (typeof age === 'number' && !isNaN(age)) jsonData.age = age;
           
           // Configurar headers
           const headers = new Headers();
@@ -378,6 +428,8 @@ const SignUp: React.FC = () => {
           if (token) {
             headers.append('Authorization', `Bearer ${token}`);
           }
+          
+          console.log('JSON a enviar:', JSON.stringify(jsonData));
           
           const jsonResponse = await fetch(API_USER_ENDPOINT, {
             method: 'POST',
@@ -399,9 +451,12 @@ const SignUp: React.FC = () => {
           // Manejar respuesta exitosa
           handleSuccessfulRegistration(jsonResponseData, {
             name: cleanName,
+            username: cleanUsername,
             phone: cleanPhone,
             country: cleanCountry,
             city: cleanCity,
+            biography: cleanBiography,
+            age: age,
             has_profile_picture: false // No se pudo enviar foto con JSON
           });
         } else {
@@ -457,11 +512,14 @@ const SignUp: React.FC = () => {
     localStorage.setItem('userId', response.id || response.user_id);
     localStorage.setItem('isAuthenticated', 'true');
     
+    // Limpiar el flag de verificación ya que el registro está completo
+    localStorage.removeItem('isVerified');
+    
     // Agregar información adicional del usuario
     localStorage.setItem('userInfo', JSON.stringify(userInfo));
 
-    // Redirigir al usuario al perfil
-    navigate('/profile');
+    // Redirigir al usuario a la página de inicio de campaña
+    navigate('/campaign-home');
   };
 
   return (
@@ -475,18 +533,20 @@ const SignUp: React.FC = () => {
 
         <div className="text-center mb-6">
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mt-2">
-            <span className="bg-gradient-to-r from-[#8b5cf6] to-[#c084fc] bg-clip-text text-transparent">K</span>
+          <div className="logo mt-4 text-center">
+          <LogoIcon width={40} height={40} className="mx-auto" />
+          </div>
           </h1>
           <h2 className="text-white mt-4 text-xl sm:text-2xl font-bold">
-            Crear una cuenta
+            Crear Perfil
           </h2>
         </div>
 
         <form className="mt-6" onSubmit={handleSubmit}>
-          {/* Campos permitidos: name, phone, country, city, profile_picture */}
+          {/* Campos permitidos: name, username, phone, country, city, biography, age, profile_picture */}
           <div className="mb-4">
             <input
-              className="w-full py-3 px-4 bg-[rgba(28,28,28,0.7)] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a78bfa] border border-[rgba(75,75,75,0.5)]"
+              className={getInputClassName(name.trim().length > 2)}
               id="name"
               placeholder="Nombre completo"
               type="text"
@@ -499,7 +559,20 @@ const SignUp: React.FC = () => {
 
           <div className="mb-4">
             <input
-              className="w-full py-3 px-4 bg-[rgba(28,28,28,0.7)] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a78bfa] border border-[rgba(75,75,75,0.5)]"
+              className={getInputClassName(username.trim().length > 2)}
+              id="username"
+              placeholder="Nombre de usuario"
+              type="text"
+              value={username}
+              onChange={handleUsernameChange}
+              disabled={isLoading}
+              autoComplete="username"
+            />
+          </div>
+
+          <div className="mb-4">
+            <input
+              className={getInputClassName(phone.trim().length >= 10)}
               id="phone"
               placeholder="Teléfono"
               type="tel"
@@ -512,7 +585,7 @@ const SignUp: React.FC = () => {
 
           <div className="mb-4">
             <input
-              className="w-full py-3 px-4 bg-[rgba(28,28,28,0.7)] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a78bfa] border border-[rgba(75,75,75,0.5)]"
+              className={getInputClassName(country.trim().length > 0)}
               id="country"
               placeholder="País"
               type="text"
@@ -525,7 +598,7 @@ const SignUp: React.FC = () => {
 
           <div className="mb-4">
             <input
-              className="w-full py-3 px-4 bg-[rgba(28,28,28,0.7)] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a78bfa] border border-[rgba(75,75,75,0.5)]"
+              className={getInputClassName(city.trim().length > 0)}
               id="city"
               placeholder="Ciudad"
               type="text"
@@ -533,6 +606,31 @@ const SignUp: React.FC = () => {
               onChange={handleCityChange}
               disabled={isLoading}
               autoComplete="address-level2"
+            />
+          </div>
+
+          <div className="mb-4">
+            <textarea
+              className={getInputClassName(biography.trim().length > 0)}
+              id="biography"
+              placeholder="Biografía"
+              value={biography}
+              onChange={handleBiographyChange}
+              disabled={isLoading}
+              autoComplete="off"
+            />
+          </div>
+
+          <div className="mb-4">
+            <input
+              className={getInputClassName(typeof age === 'number' && age > 0)}
+              id="age"
+              placeholder="Edad"
+              type="number"
+              value={age}
+              onChange={handleAgeChange}
+              disabled={isLoading}
+              autoComplete="off"
             />
           </div>
 
@@ -568,17 +666,6 @@ const SignUp: React.FC = () => {
           </button>
         </form>
 
-        <div className="create-account">
-          <hr className="border-t border-[rgba(75,75,75,0.3)] my-6" />
-          <div className="flex items-center justify-center">
-            <p className="text-gray-300 text-center">
-              ¿Ya tienes una cuenta?{" "}
-              <Link className="text-[#a78bfa] hover:text-[#c4b5fd] hover:underline transition-colors" to="/signin">
-                Iniciar sesión
-              </Link>
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   );

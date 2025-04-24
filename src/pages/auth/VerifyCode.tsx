@@ -228,6 +228,9 @@ const VerifyCode: React.FC = () => {
         return;
       }
   
+      console.log('Verificando código:', enteredCode);
+      console.log('Email que se usará:', email);
+      
       // Enviamos el código al backend para su verificación
       const response = await fetch("https://contabl.net/kleep/api/auth/verify-code", {
         method: "POST",
@@ -245,6 +248,7 @@ const VerifyCode: React.FC = () => {
       const data = await response.json();
       
       if (data.success || data.verified || data.status === 'success') {
+        console.log('Verificación exitosa');
         setStatus('success');
         setSuccessMessage('¡Código verificado correctamente! Redirigiendo...');
         
@@ -258,10 +262,62 @@ const VerifyCode: React.FC = () => {
           localStorage.setItem('token', data.token);
         }
         
-        // Redirigir después de mostrar mensaje de éxito
-        timeoutRef.current = setTimeout(() => {
-          navigate('/profile-saldo');
-        }, 1500);
+        // Verificar si el usuario ya existe en el sistema
+        try {
+          // Intentar obtener información del usuario con el token actual
+          const userCheckResponse = await fetch("https://contabl.net/kleep/api/user", {
+            method: "GET",
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${data.token || localStorage.getItem('token')}` 
+            }
+          });
+          
+          // Si la solicitud es exitosa, significa que el usuario ya existe
+          const userExists = userCheckResponse.ok;
+          const userData = userCheckResponse.ok ? await userCheckResponse.json() : null;
+          
+          console.log("Verificación de usuario existente:", userExists);
+          console.log("Datos del usuario:", userData);
+          
+          // Redirigir después de mostrar mensaje de éxito
+          timeoutRef.current = setTimeout(() => {
+            // Si el usuario existe o hay datos del usuario en la respuesta
+            if (userExists && userData && userData.success) {
+              console.log("Redirigiendo a campaign-home (usuario existente confirmado)");
+              navigate('/campaign-home');
+            } else {
+              console.log("Redirigiendo a signup (usuario nuevo o no confirmado)");
+              navigate('/signup');
+            }
+          }, 1500);
+        } catch (userCheckError) {
+          console.error("Error al verificar usuario existente:", userCheckError);
+          
+          // En caso de error, intentar con la lógica anterior
+          timeoutRef.current = setTimeout(() => {
+            // Si tenemos información del usuario existente en la respuesta
+            // o cualquier otro indicador de que el usuario ya existe
+            const isNewUser = data.isNewUser === true || (data.user && data.user.isNew === true);
+            const isExistingUser = data.existingUser === true || (data.user && !data.user.isNew);
+            
+            // También verificar si hay datos de usuario en la respuesta
+            const hasUserData = data.user && (data.user.id || data.user.userId || data.user.name);
+            
+            console.log("Datos de respuesta:", data);
+            console.log("¿Es usuario nuevo?", isNewUser);
+            console.log("¿Es usuario existente?", isExistingUser || hasUserData);
+            
+            // Si hay cualquier indicación de que es un usuario existente o hay datos del usuario
+            if (isExistingUser || hasUserData || !isNewUser) {
+              console.log("Redirigiendo a campaign-home (usuario existente)");
+              navigate('/campaign-home');
+            } else {
+              console.log("Redirigiendo a signup (usuario nuevo)");
+              navigate('/signup');
+            }
+          }, 1500);
+        }
       } else {
         setErrorMessage('Código de verificación incorrecto. Por favor, revise e intente de nuevo.');
         setCode(Array(6).fill(''));
@@ -290,6 +346,7 @@ const VerifyCode: React.FC = () => {
   
     try {
       // Solicitar nuevo código con email directamente
+      console.log('Solicitando nuevo código para:', email);
       
       const response = await fetch("https://contabl.net/kleep/api/auth/send-code", {
         method: "POST",
@@ -302,6 +359,7 @@ const VerifyCode: React.FC = () => {
       }
       
       const data = await response.json();
+      console.log('Respuesta de reenvío de código:', data);
       
       // Ya no almacenamos la respuesta de la API en localStorage
       // La verificación se realiza en el backend

@@ -21,6 +21,8 @@ interface VerificationResponse {
   account?: TikTokAccount;
 }
 
+const VERIFY_URL = 'https://contabl.net/kleep/api/tiktok-accounts/verify';
+
 /**
 * Obtiene las cuentas de TikTok asociadas a un usuario
 * @param userId ID del usuario
@@ -32,7 +34,7 @@ export const fetchTikTokAccounts = async (userId: string): Promise<TikTokAccount
 
       const response = await fetch(apiUrl);
 
-      if (!response.ok) {
+    if (!response.ok) {
           throw new Error(`Error en la petición: ${response.status}`);
       }
 
@@ -67,7 +69,7 @@ export const fetchTikTokAccounts = async (userId: string): Promise<TikTokAccount
               username: account.account || account.username || `@${account.id_user || 'usuario'}`,
               isVerified: account.verified === 1 || account.verified === true,
               verifiedStatus: account.verified === 0 && account.verified_request ? 'pending' : undefined,
-              tiktok_code: account.tiktok_code ? String(account.tiktok_code) : generateVerificationCode(),
+              tiktok_code: account.tiktok_code ? String(account.tiktok_code) : "", // Usar el código del backend o cadena vacía
               verified_request: account.verified_request,
               verified_att: verifiedAttempts  // Asegurar que siempre sea un número
           };
@@ -91,13 +93,36 @@ export const fetchTikTokAccountsFromNewApi = async (): Promise<TikTokAccount[]> 
       throw new Error('No se encontró un token de autenticación válido.');
     }
 
-    const response = await fetch(apiUrl, {
+    // Intentar primero con Bearer token
+    let response = await fetch(apiUrl, {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
+        'Authorization': authToken.startsWith('Bearer ') ? authToken : `Bearer ${authToken}`,
       },
     });
+
+    // Si hay error 401, intentar con formato alternativo
+    if (response.status === 401) {
+      // Intentar con token sin Bearer
+      response = await fetch(apiUrl, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': authToken,
+        },
+      });
+      
+      // Si sigue fallando, intentar con query param
+      if (response.status === 401) {
+        response = await fetch(`${apiUrl}?api_token=${encodeURIComponent(authToken)}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        });
+      }
+    }
 
     if (response.status === 401) {
       throw new Error('Error 401: No autorizado. Verifica tu token de autenticación.');
@@ -119,7 +144,7 @@ export const fetchTikTokAccountsFromNewApi = async (): Promise<TikTokAccount[]> 
       username: account.username,
       isVerified: account.verified === 1,
       verifiedStatus: account.verified === 0 ? 'pending' : undefined,
-      tiktok_code: account.verification_code, // Usar el código proporcionado por el backend
+      tiktok_code: account.verification_code || "", // Usar el código proporcionado por el backend
       verified_request: account.created_at,
       verified_att: 0, // Inicializar contador de intentos
     }));
@@ -127,14 +152,6 @@ export const fetchTikTokAccountsFromNewApi = async (): Promise<TikTokAccount[]> 
     console.error('Error al obtener cuentas de TikTok:', error.message);
     throw new Error(`Error al obtener cuentas de TikTok: ${error.message}`);
   }
-};
-
-/**
-* Genera un código de verificación aleatorio
-* @returns Código de verificación
-*/
-export const generateVerificationCode = (): string => {
-  return Math.floor(10000000 + Math.random() * 90000000).toString();
 };
 
 /**
@@ -150,102 +167,14 @@ export const requestTikTokVerification = async (
   username: string = ''
 ): Promise<VerificationResponse> => {
   try {
-      if (!accountId) {
-          throw new Error('ID de cuenta no proporcionado');
-      }
+    if (!accountId) {
+      throw new Error('ID de cuenta no proporcionado');
+    }
 
-      // Datos a enviar para verificación
-      const verifyData = {
-          account: username,          // Nombre de usuario de TikTok
-          set: "1",                   // Indicar actualización
-          account_id: accountId       // ID de la cuenta específica a verificar
-      };
-
-      // Intentar realizar la petición PUT real
-      try {
-          // Configurar headers
-          const headers = new Headers();
-          headers.append('Content-Type', 'application/json');
-
-          // Realizar la solicitud PUT sin el modo no-cors
-          const response = await fetch('https://contabl.net/nova/verified-request', {
-              method: 'PUT',
-              headers: headers,
-              body: JSON.stringify(verifyData)
-          });
-
-          // Intentar obtener el resultado
-          try {
-              const responseData = await response.json();
-
-              return {
-                  success: true,
-                  message: 'Solicitud de verificación enviada correctamente.',
-                  account: {
-                      id: accountId,
-                      account_id: accountId,
-                      username: username || '',
-                      isVerified: false,
-                      verifiedStatus: 'pending',
-                      tiktok_code: tiktokCode,
-                      verified_request: "1",
-                      verified_att: 1 // Asignar un valor inicial de intentos
-                  }
-              };
-          } catch (parseError) {
-              return {
-                  success: true,
-                  message: 'Solicitud enviada, pero no se pudo confirmar la respuesta del servidor.',
-                  account: {
-                      id: accountId,
-                      account_id: accountId,
-                      username: username || '',
-                      isVerified: false,
-                      verifiedStatus: 'pending',
-                      tiktok_code: tiktokCode,
-                      verified_request: "1",
-                      verified_att: 1 // Asignar un valor inicial de intentos
-                  }
-              };
-          }
-      } catch (error) {
-          // Si hay un error de CORS, intentamos una alternativa
-          // Crear una imagen temporal para hacer la solicitud (técnica para eludir CORS)
-          const img = new Image();
-          const queryParams = `?account=${encodeURIComponent(username)}&set=1&account_id=${encodeURIComponent(accountId)}`;
-          img.src = `https://contabl.net/nova/verified-request${queryParams}`;
-
-          return {
-              success: true,
-              message: 'Solicitud alternativa enviada. El servidor procesará la verificación en breve.',
-              account: {
-                  id: accountId,
-                  account_id: accountId,
-                  username: username || '',
-                  isVerified: false,
-                  verifiedStatus: 'pending',
-                  tiktok_code: tiktokCode,
-                  verified_request: "1",
-                  verified_att: 1 // Asignar un valor inicial de intentos
-              }
-          };
-      }
-  } catch (error: any) {
-      return {
-          success: false,
-          message: error.message || 'Error al solicitar verificación'
-      };
-  }
-};
-
-/**
- * Solicita la verificación de una cuenta de TikTok
- * @param accountId ID de la cuenta de TikTok
- * @returns Promise con el resultado de la solicitud de verificación
- */
-export const requestTikTokAccountVerification = async (accountId: string): Promise<{ success: boolean; message: string; account?: TikTokAccount; verification_code?: string }> => {
-  try {
-    const apiUrl = `https://contabl.net/kleep/api/tiktok-accounts/verify`;
+    // Verificar que el código esté presente
+    if (!tiktokCode) {
+      throw new Error('Código de verificación no proporcionado');
+    }
 
     // Obtener el token de autenticación
     const authToken = getAuthToken();
@@ -253,34 +182,263 @@ export const requestTikTokAccountVerification = async (accountId: string): Promi
       throw new Error('No se encontró un token de autenticación válido.');
     }
 
-    // Configurar los datos de la solicitud
-    const requestData = { account_id: accountId };
+    // Datos mejorados para la solicitud, usando el código proporcionado
+    const verifyData = {
+      account: username,
+      set: '1',
+      account_id: accountId,
+      verification_code: tiktokCode,
+      username: username, // Añadir username también
+      code: tiktokCode,   // Añadir code también como alternativa
+      status: 'pending'   // Indicar estado
+    };
 
-    const response = await fetch(apiUrl, {
+    console.log('Enviando datos de verificación con código del backend:', tiktokCode);
+
+    // Intentar primero con Bearer token
+    let response = await fetch(VERIFY_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
+        'Authorization': authToken.startsWith('Bearer ') ? authToken : `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(verifyData),
+    });
+
+    // Si hay error 401, intentar con formato alternativo
+    if (response.status === 401) {
+      // Intentar con token sin Bearer
+      response = await fetch(VERIFY_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': authToken,
+        },
+        body: JSON.stringify(verifyData),
+      });
+      
+      // Si sigue fallando, intentar con query param
+      if (response.status === 401) {
+        response = await fetch(`${VERIFY_URL}?api_token=${encodeURIComponent(authToken)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(verifyData),
+        });
+      }
+    }
+
+    if (response.status === 401) {
+      throw new Error('Error 401: No autorizado. Verifica tu token de autenticación.');
+    }
+
+    if (response.status === 422) {
+      // Intentar obtener detalles del error 422
+      try {
+        const errorData = await response.json();
+        console.error('Error 422 detalles:', errorData);
+        let errorMessage = 'Los datos enviados no son válidos.';
+        
+        // Extraer mensajes de error específicos si están disponibles
+        if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.errors) {
+          const errors = Object.values(errorData.errors).flat();
+          if (errors.length > 0) {
+            errorMessage = errors.join(', ');
+          }
+        }
+        
+        throw new Error(`Error 422: ${errorMessage}`);
+      } catch (e) {
+        throw new Error('Error 422: El servidor no pudo procesar la solicitud. Verifica los datos enviados.');
+      }
+    }
+
+    if (!response.ok) {
+      throw new Error(`Error en la solicitud de verificación: ${response.status}`);
+    }
+
+    const responseData = await response.json();
+    console.log('Respuesta de verificación:', responseData);
+
+    // Preservar el código proporcionado por el backend
+    const backendCode = responseData.verification_code || responseData.tiktok_code || tiktokCode;
+
+    return {
+      success: true,
+      message: 'Solicitud de verificación enviada correctamente.',
+      account: {
+        id: accountId,
+        account_id: accountId,
+        username: username || '',
+        isVerified: false,
+        verifiedStatus: 'pending',
+        tiktok_code: backendCode, // Usar el código del backend
+        verified_request: new Date().toISOString(),
+        verified_att: 1,
+      },
+    };
+  } catch (error: any) {
+    console.error('Error al solicitar verificación:', error.message);
+    return {
+      success: false,
+      message: error.message || 'Error al solicitar verificación',
+    };
+  }
+};
+
+// Verificar y manejar el token de autenticación antes de realizar solicitudes
+const getAuthTokenOrThrow = (): string => {
+  const authToken = getAuthToken();
+  if (!authToken) {
+    throw new Error('No se encontró un token de autenticación válido. Por favor, inicia sesión nuevamente.');
+  }
+  return authToken;
+};
+
+/**
+ * Solicita la verificación de una cuenta de TikTok
+ * @param username Nombre de usuario de TikTok
+ * @param followerCount Número de seguidores de la cuenta
+ * @param profileUrl URL del perfil de TikTok
+ * @returns Promise con el resultado de la solicitud de verificación
+ */
+export const requestTikTokAccountVerification = async (username: string, followerCount: number, profileUrl: string): Promise<{ success: boolean; message: string; account?: TikTokAccount; verification_code?: string }> => {
+  try {
+    const apiUrl = `https://contabl.net/kleep/api/tiktok-accounts/verify`;
+
+    // Obtener el token de autenticación
+    const authToken = getAuthTokenOrThrow();
+
+    // Asegurar que el username no contenga @ al inicio
+    const cleanUsername = username.startsWith('@') ? username.substring(1) : username;
+
+    // Configurar los datos de la solicitud sin prefijar un código
+    const requestData = {
+      username: cleanUsername,
+      follower_count: followerCount,
+      profile_url: profileUrl.includes('@') ? profileUrl : `https://www.tiktok.com/@${cleanUsername}`,
+      status: 'pending'
+    };
+
+    console.log('Enviando solicitud de verificación para obtener código del backend');
+
+    // Intentar primero con Bearer token
+    let response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': authToken.startsWith('Bearer ') ? authToken : `Bearer ${authToken}`,
       },
       body: JSON.stringify(requestData),
     });
+
+    // Si hay error 401, intentar con formato alternativo
+    if (response.status === 401) {
+      // Intentar con token sin Bearer
+      response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': authToken,
+        },
+        body: JSON.stringify(requestData),
+      });
+      
+      // Si sigue fallando, intentar con query param
+      if (response.status === 401) {
+        response = await fetch(`${apiUrl}?api_token=${encodeURIComponent(authToken)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(requestData),
+        });
+      }
+    }
+
+    if (response.status === 401) {
+      throw new Error('Error 401: No autorizado. Verifica tu token de autenticación.');
+    }
+
+    if (response.status === 422) {
+      // Intentar obtener información más detallada sobre el error
+      try {
+        const errorData = await response.json();
+        console.error('Error 422 en verificación alternativa:', errorData);
+        
+        let errorMessage = 'Datos de verificación rechazados por el servidor.';
+        if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.errors) {
+          errorMessage = Object.values(errorData.errors).flat().join(', ');
+        }
+        
+        throw new Error(`Error 422: ${errorMessage}`);
+      } catch (e) {
+        throw new Error('Error 422: El servidor rechazó los datos enviados.');
+      }
+    }
 
     if (!response.ok) {
       throw new Error(`Error en la solicitud de verificación: ${response.status}`);
     }
 
     const data = await response.json();
+    console.log('Respuesta de verificación alternativa:', data);
 
-    if (!data.success) {
-      throw new Error(data.message || 'Error desconocido en la solicitud de verificación');
+    // Obtener el código de verificación de la respuesta
+    let verificationCode = "";
+    if (data.verification_code) {
+      verificationCode = data.verification_code;
+    } else if (data.code) {
+      verificationCode = data.code;
+    } else if (data.tiktok_code) {
+      verificationCode = data.tiktok_code;
+    }
+
+    console.log('Código de verificación recibido del backend:', verificationCode);
+
+    // Si la respuesta no tiene la estructura esperada, intentar adaptarla
+    if (!data.account) {
+      // Crear una respuesta de éxito basada en los datos disponibles
+      return {
+        success: true,
+        message: 'Solicitud procesada (estructura de respuesta alternativa).',
+        account: {
+          id: data.id || username,
+          username: cleanUsername,
+          isVerified: false,
+          verifiedStatus: 'pending',
+          tiktok_code: verificationCode, // Usar el código del backend
+          verified_request: new Date().toISOString(),
+          verified_att: 0,
+        },
+        verification_code: verificationCode, // Devolver el código del backend
+      };
     }
 
     return {
-      success: data.success,
-      message: data.message,
-      account: data.account,
-      verification_code: data.verification_code,
+      success: true,
+      message: 'Solicitud de verificación enviada correctamente.',
+      account: {
+        id: String(data.account.id),
+        username: data.account.username,
+        isVerified: data.account.verified === 1,
+        verifiedStatus: data.account.verified === 0 ? 'pending' : undefined,
+        tiktok_code: verificationCode, // Usar el código del backend
+        verified_request: data.account.created_at,
+        verified_att: 0, // Inicializar contador de intentos
+      },
+      verification_code: verificationCode, // Devolver el código del backend
     };
   } catch (error: any) {
     console.error('Error al solicitar la verificación de la cuenta de TikTok:', error.message);
@@ -336,7 +494,8 @@ export const checkVerificationStatus = async (accountIds: string[]): Promise<Tik
               username: existingAccount?.username || existingAccount?.account || '', // Preservar nombre si existe
               isVerified,
               verifiedStatus: isVerified ? undefined : 'pending',
-              verified_att: previousAttempts // Preservar el contador de intentos
+              verified_att: previousAttempts, // Preservar el contador de intentos
+              tiktok_code: existingAccount?.tiktok_code || "" // Preservar el código de verificación
           };
       });
   } catch (error: any) {
@@ -359,6 +518,12 @@ export const resetTikTokVerification = async (
           throw new Error('ID de cuenta no proporcionado');
       }
 
+      // Obtener el token de autenticación
+      const authToken = getAuthToken();
+      if (!authToken) {
+          throw new Error('No se encontró un token de autenticación válido.');
+      }
+
       // Datos a enviar para reinicio con set=1
       const resetData = {
           account: username,        // Nombre de usuario de TikTok
@@ -366,19 +531,56 @@ export const resetTikTokVerification = async (
           account_id: accountId     // ID de la cuenta específica
       };
 
-      // Hacer la petición PUT igual que en la verificación
-      const headers = new Headers();
-      headers.append('Content-Type', 'application/json');
-
-      const response = await fetch('https://contabl.net/nova/verified-request', {
-          method: 'PUT',
-          headers: headers,
+      // Hacer la petición POST con token
+      // Intentar primero con Bearer token
+      let response = await fetch(VERIFY_URL, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': authToken.startsWith('Bearer ') ? authToken : `Bearer ${authToken}`,
+          },
           body: JSON.stringify(resetData)
       });
+
+      // Si hay error 401, intentar con formato alternativo
+      if (response.status === 401) {
+          // Intentar con token sin Bearer
+          response = await fetch(VERIFY_URL, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'Authorization': authToken,
+              },
+              body: JSON.stringify(resetData)
+          });
+          
+          // Si sigue fallando, intentar con query param
+          if (response.status === 401) {
+              response = await fetch(`${VERIFY_URL}?api_token=${encodeURIComponent(authToken)}`, {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                      'Accept': 'application/json',
+                  },
+                  body: JSON.stringify(resetData)
+              });
+          }
+      }
+
+      if (response.status === 401) {
+          throw new Error('Error 401: No autorizado. Verifica tu token de autenticación.');
+      }
 
       // Procesar respuesta
       try {
           const responseData = await response.json();
+          
+          // Obtener el código de verificación de la respuesta
+          const verificationCode = responseData.verification_code || 
+                                  responseData.tiktok_code || 
+                                  responseData.code || "";
 
           // Crear respuesta asegurando que id y account_id tengan el mismo valor
           const accountResponse: TikTokAccount = {
@@ -387,7 +589,7 @@ export const resetTikTokVerification = async (
               username: username || '',
               isVerified: false,
               verifiedStatus: 'pending',        // Establecer como pendiente
-              tiktok_code: responseData.tiktok_code || '',
+              tiktok_code: verificationCode,    // Usar el código del backend
               verified_request: new Date().toISOString(),
               verified_att: 0                   // Reiniciar contador
           };
@@ -409,42 +611,18 @@ export const resetTikTokVerification = async (
               verified_att: 0
           };
 
-          return {
-              success: true,
+    return {
+      success: true,
               message: 'Reinicio solicitado, pero no se pudo confirmar la respuesta.',
               account: accountResponse
           };
-      }
+    }
   } catch (error: any) {
-      // Intentar método alternativo si hay error CORS
-      try {
-          // Crear una imagen temporal para hacer la solicitud (técnica para eludir CORS)
-          const img = new Image();
-          const queryParams = `?account=${encodeURIComponent(username)}&set=1&account_id=${encodeURIComponent(String(accountId))}`;
-          img.src = `https://contabl.net/nova/verified-request${queryParams}`;
-
-          // Asegurar que el objeto account esté correctamente formado
-          const accountResponse: TikTokAccount = {
-              id: String(accountId),            // Asegurar que sea string
-              account_id: String(accountId),    // Asegurar que sea string
-              username: username || '',
-              isVerified: false,
-              verifiedStatus: 'pending',        // Establecer como pendiente
-              verified_request: new Date().toISOString(),
-              verified_att: 0
-          };
-
-          return {
-              success: true,
-              message: 'Solicitud alternativa de reinicio enviada.',
-              account: accountResponse
-          };
-      } catch (fallbackError) {
-          return {
-              success: false,
-              message: 'Error al reiniciar verificación: ' + (error.message || 'Error desconocido')
-          };
-      }
+      console.error('Error al reiniciar verificación:', error.message);
+      return {
+        success: false,
+        message: 'Error al reiniciar verificación: ' + (error.message || 'Error desconocido')
+      };
   }
 };
 
@@ -462,13 +640,40 @@ export const fetchUnverifiedTikTokAccounts = async (): Promise<TikTokAccount[]> 
       throw new Error('No se encontró un token de autenticación válido.');
     }
 
-    const response = await fetch(apiUrl, {
+    // Intentar primero con Bearer token
+    let response = await fetch(apiUrl, {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
+        'Authorization': authToken.startsWith('Bearer ') ? authToken : `Bearer ${authToken}`,
       },
     });
+
+    // Si hay error 401, intentar con formato alternativo
+    if (response.status === 401) {
+      // Intentar con token sin Bearer
+      response = await fetch(apiUrl, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': authToken,
+        },
+      });
+      
+      // Si sigue fallando, intentar con query param
+      if (response.status === 401) {
+        response = await fetch(`${apiUrl}?api_token=${encodeURIComponent(authToken)}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        });
+      }
+    }
+
+    if (response.status === 401) {
+      throw new Error('Error 401: No autorizado. Verifica tu token de autenticación.');
+    }
 
     if (!response.ok) {
       throw new Error(`Error en la petición: ${response.status}`);
@@ -484,7 +689,7 @@ export const fetchUnverifiedTikTokAccounts = async (): Promise<TikTokAccount[]> 
     return data.accounts.map((account: any) => ({
       id: String(account.id),
       username: account.username,
-      tiktok_code: account.verification_code,
+      tiktok_code: account.verification_code || "", // Usar el código del backend o cadena vacía
       verified_request: account.created_at,
       isVerified: false, // Por defecto, no están verificadas
       verifiedStatus: 'unverified',
@@ -498,7 +703,6 @@ export const fetchUnverifiedTikTokAccounts = async (): Promise<TikTokAccount[]> 
 export default {
   fetchTikTokAccounts,
   fetchTikTokAccountsFromNewApi,
-  generateVerificationCode,
   requestTikTokVerification,
   requestTikTokAccountVerification,
   checkVerificationStatus,

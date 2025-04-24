@@ -1,11 +1,20 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Settings, Link2, ShieldCheck, CreditCard, DollarSign, LogOut } from 'lucide-react';
-import { logout } from '../../services/authService';
+import { logout, getAuthToken } from '../../services/authService';
 
 interface ProfileSidebarProps {
   mobile?: boolean;
   onCloseMobileMenu?: () => void;
+}
+
+interface UserData {
+  name?: string;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  profile_image?: string;
 }
 
 const ProfileSidebar: React.FC<ProfileSidebarProps> = ({ mobile, onCloseMobileMenu }) => {
@@ -14,16 +23,112 @@ const ProfileSidebar: React.FC<ProfileSidebarProps> = ({ mobile, onCloseMobileMe
   const navigate = useNavigate();
   const [userName, setUserName] = useState<string>('Usuario');
   const [userInitials, setUserInitials] = useState<string>('U');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   
-
 
   // Obtener el nombre del usuario al cargar el componente
   useEffect(() => {
-    getUserData();
+    fetchUserData();
   }, []);
 
-  // Función para obtener los datos del usuario
-  const getUserData = () => {
+  // Función para obtener los datos del usuario desde la API
+  const fetchUserData = async () => {
+    setIsLoading(true);
+    try {
+      const authToken = getAuthToken();
+      if (!authToken) {
+        // Si no hay token, redirigir al login
+        navigate('/login');
+        return;
+      }
+
+      // Intentar obtener los datos del usuario desde la API
+      const response = await fetch('https://contabl.net/kleep/api/user', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': authToken.startsWith('Bearer ') ? authToken : `Bearer ${authToken}`,
+        },
+      });
+
+      // Si hay error 401, intentar con formato alternativo
+      let userData: UserData | null = null;
+      
+      if (response.status === 401) {
+        // Intentar con token sin Bearer
+        const altResponse = await fetch('https://contabl.net/kleep/api/user', {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': authToken,
+          },
+        });
+        
+        // Si sigue fallando, intentar con query param
+        if (altResponse.status === 401) {
+          const queryResponse = await fetch(`https://contabl.net/kleep/api/user?api_token=${encodeURIComponent(authToken)}`, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+          });
+          
+          if (queryResponse.ok) {
+            const data = await queryResponse.json();
+            userData = data.user || data;
+          }
+        } else if (altResponse.ok) {
+          const data = await altResponse.json();
+          userData = data.user || data;
+        }
+      } else if (response.ok) {
+        const data = await response.json();
+        userData = data.user || data;
+      }
+
+      // Si obtuvimos datos de usuario desde la API
+      if (userData) {
+        console.log('User data from API:', userData);
+        
+        // Establecer el nombre de usuario
+        if (userData.name) {
+          setUserName(userData.name);
+          setUserInitials(getInitials(userData.name));
+        } else if (userData.username) {
+          setUserName(userData.username);
+          setUserInitials(getInitials(userData.username));
+        } else if (userData.first_name) {
+          const fullName = userData.last_name 
+            ? `${userData.first_name} ${userData.last_name}`
+            : userData.first_name;
+          setUserName(fullName);
+          setUserInitials(getInitials(fullName));
+        } else if (userData.email) {
+          const emailName = userData.email.split('@')[0];
+          setUserName(emailName);
+          setUserInitials(getInitials(emailName));
+        }
+        
+        // Establecer la imagen de perfil
+        if (userData.profile_image) {
+          setProfileImage(userData.profile_image);
+        }
+      } else {
+        // Si no se pudieron obtener datos de la API, intentar con localStorage
+        getUserDataFromLocalStorage();
+      }
+    } catch (error) {
+      console.error('Error fetching user data from API:', error);
+      // Fallar silenciosamente y usar datos locales
+      getUserDataFromLocalStorage();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Función para obtener los datos del usuario desde localStorage (fallback)
+  const getUserDataFromLocalStorage = () => {
     // Intentar obtener datos del usuario desde localStorage
     const storedApiResponse = localStorage.getItem('apiResponse');
 
@@ -144,17 +249,46 @@ const ProfileSidebar: React.FC<ProfileSidebarProps> = ({ mobile, onCloseMobileMe
     navigate('/campaign-home');
   };
 
+  // Renderizar avatar de usuario basado en si tiene imagen de perfil o no
+  const renderUserAvatar = () => {
+    if (isLoading) {
+      return (
+        <div
+          className={`mb-3 rounded-full ${mobile ? 'w-[60px] h-[60px]' : 'w-[80px] h-[80px]'}
+                    flex items-center justify-center text-white bg-gray-700 animate-pulse`}
+        />
+      );
+    }
+    
+    if (profileImage) {
+      return (
+        <div className={`mb-3 rounded-full ${mobile ? 'w-[60px] h-[60px]' : 'w-[80px] h-[80px]'} overflow-hidden`}>
+          <img 
+            src={profileImage} 
+            alt={userName} 
+            className="w-full h-full object-cover"
+            onError={() => setProfileImage(null)} // Si la imagen falla, mostrar iniciales
+          />
+        </div>
+      );
+    }
+    
+    return (
+      <div
+        className={`mb-3 rounded-full ${mobile ? 'w-[60px] h-[60px]' : 'w-[80px] h-[80px]'}
+                  flex items-center justify-center text-white font-bold
+                  ${mobile ? 'text-xl' : 'text-2xl'}`}
+        style={{ backgroundColor: getAvatarColor() }}
+      >
+        {userInitials}
+      </div>
+    );
+  };
+
   return (
     <div className="h-full bg-[#0c0c0c]">
       <div className={`flex flex-col items-center ${mobile ? 'px-2 py-4' : 'p-5 pb-6'} border-b border-[#1c1c1c]`}>
-        <div
-          className={`mb-3 rounded-full ${mobile ? 'w-[60px] h-[60px]' : 'w-[80px] h-[80px]'}
-                    flex items-center justify-center text-white font-bold
-                    ${mobile ? 'text-xl' : 'text-2xl'}`}
-          style={{ backgroundColor: getAvatarColor() }}
-        >
-          {userInitials}
-        </div>
+        {renderUserAvatar()}
         <h3 className={`mb-1 ${mobile ? 'text-base' : 'text-lg'} font-medium`}>
           {userName}
         </h3>

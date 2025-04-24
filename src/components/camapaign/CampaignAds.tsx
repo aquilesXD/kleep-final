@@ -234,7 +234,7 @@ const AnnouncementContent = () => {
       setAnnouncements(prevAnnouncements => 
         prevAnnouncements.map(announcement => {
           if (announcement.id === announcementId) {
-            return {
+        return {
               ...announcement,
               comments: [...announcement.comments, data.comment]
             };
@@ -294,7 +294,7 @@ const AnnouncementContent = () => {
         )}
       </div>
     );
-  }
+      }
 
   if (announcements.length === 0) {
     return (
@@ -357,99 +357,99 @@ const AnnouncementContent = () => {
           {/* Lista de anuncios */}
           {announcements.map((announcement) => (
             <div key={announcement.id} className="border-b border-[#1a1a1a] p-4">
-              {/* Autor y fecha */}
-              <div className="flex items-start mb-3">
-                <div className="mr-3 flex-shrink-0">
-                  <img
+            {/* Autor y fecha */}
+            <div className="flex items-start mb-3">
+              <div className="mr-3 flex-shrink-0">
+                <img
                     src={announcement.user_profile_image}
                     alt={announcement.user_name}
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center">
-                    <span className="font-medium text-white text-[15px]">
-                      {announcement.user_name}
-                    </span>
-                    <span className="ml-1 bg-blue-600 text-white text-xs px-0.5 rounded">A</span>
-                  </div>
-                  <span className="text-gray-500 text-xs">hace {formatRelativeTime(announcement.created_at)}</span>
-                </div>
+                  className="w-10 h-10 rounded-full object-cover"
+                />
               </div>
 
-              {/* Título y contenido */}
+              <div>
+                <div className="flex items-center">
+                  <span className="font-medium text-white text-[15px]">
+                      {announcement.user_name}
+                  </span>
+                    <span className="ml-1 bg-blue-600 text-white text-xs px-0.5 rounded">A</span>
+                </div>
+                  <span className="text-gray-500 text-xs">hace {formatRelativeTime(announcement.created_at)}</span>
+              </div>
+            </div>
+
+            {/* Título y contenido */}
               <h2 className="text-xl font-bold text-white mb-3">{announcement.title}</h2>
 
-              <div className="space-y-3 mb-5">
+            <div className="space-y-3 mb-5">
                 <p className="text-gray-200 text-sm leading-relaxed">{announcement.content}</p>
-              </div>
+            </div>
 
-              {/* Reacciones y estadísticas */}
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center">
-                  <div className="flex items-center bg-[#222] rounded-full px-2 py-0.5">
-                    <div className="bg-red-500 p-0.5 rounded-full">
-                      <Heart size={12} className="text-white" />
-                    </div>
-                    <div className="bg-[#eab308] p-0.5 rounded-full -ml-1">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
-                      </svg>
-                    </div>
+            {/* Reacciones y estadísticas */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center">
+                <div className="flex items-center bg-[#222] rounded-full px-2 py-0.5">
+                  <div className="bg-red-500 p-0.5 rounded-full">
+                    <Heart size={12} className="text-white" />
+                  </div>
+                  <div className="bg-[#eab308] p-0.5 rounded-full -ml-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+                    </svg>
+                  </div>
                     <span className="text-white text-xs ml-1.5">{announcement.reactions_count}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3 text-gray-400 text-xs">
-                  <div className="flex items-center">
-                    <MessageSquare size={14} className="mr-1" />
-                    <span>{announcement.comments.length}</span>
-                  </div>
                 </div>
               </div>
 
-              {/* Acciones del post */}
-              <div className="flex border-t border-[#222] pt-2.5">
+              <div className="flex items-center space-x-3 text-gray-400 text-xs">
+                <div className="flex items-center">
+                  <MessageSquare size={14} className="mr-1" />
+                    <span>{announcement.comments.length}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Acciones del post */}
+            <div className="flex border-t border-[#222] pt-2.5">
                 <button 
                   className={`flex-1 flex items-center justify-center py-2 ${announcement.user_reacted ? 'text-blue-500' : 'text-gray-400'} hover:bg-[#191919] rounded-md transition-colors`}
                   onClick={() => handleAnnouncementReaction(announcement.id)}
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" className="mr-2">
+                <svg width="18" height="18" viewBox="0 0 24 24" className="mr-2">
                     <path fill={announcement.user_reacted ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
-                  </svg>
-                  <span className="text-sm">Reaccionar</span>
-                </button>
+                </svg>
+                <span className="text-sm">Reaccionar</span>
+              </button>
 
-                <button className="flex-1 flex items-center justify-center py-2 text-gray-400 hover:bg-[#191919] rounded-md transition-colors">
-                  <MessageSquare size={18} className="mr-2" />
-                  <span className="text-sm">Comentario</span>
-                </button>
+              <button className="flex-1 flex items-center justify-center py-2 text-gray-400 hover:bg-[#191919] rounded-md transition-colors">
+                <MessageSquare size={18} className="mr-2" />
+                <span className="text-sm">Comentario</span>
+              </button>
 
-                <button className="flex-1 flex items-center justify-center py-2 text-gray-400 hover:bg-[#191919] rounded-md transition-colors">
+              <button className="flex-1 flex items-center justify-center py-2 text-gray-400 hover:bg-[#191919] rounded-md transition-colors">
                   <Share2 size={18} className="mr-2" />
-                  <span className="text-sm">Compartir</span>
-                </button>
-              </div>
+                <span className="text-sm">Compartir</span>
+              </button>
+          </div>
 
-              {/* Campo de entrada para nuevo comentario */}
+          {/* Campo de entrada para nuevo comentario */}
               <div className="px-0 py-3 flex items-center mt-2">
                 <div className="w-8 h-8 flex-shrink-0 bg-gray-600 rounded-full flex items-center justify-center text-white mr-3">
                   <span className="text-xs">YO</span>
                 </div>
-                <div className="flex-1 relative">
-                  <input
-                    type="text"
+            <div className="flex-1 relative">
+              <input
+                type="text"
                     placeholder="Escribe un comentario..."
-                    className="w-full bg-[#222] rounded-md px-4 py-2 text-sm text-gray-200 focus:outline-none"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
+                className="w-full bg-[#222] rounded-md px-4 py-2 text-sm text-gray-200 focus:outline-none"
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
                     onKeyPress={(e) => {
                       if (e.key === 'Enter') {
                         handleAddComment(announcement.id);
                       }
                     }}
-                  />
+              />
                   <button 
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-blue-500"
                     onClick={() => handleAddComment(announcement.id)}
@@ -457,39 +457,39 @@ const AnnouncementContent = () => {
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="22" y1="2" x2="11" y2="13"></line>
                       <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                    </svg>
-                  </button>
-                </div>
-              </div>
+                </svg>
+              </button>
+            </div>
+          </div>
 
               {/* Lista de comentarios */}
               {announcement.comments.length > 0 && (
                 <div className="mt-3">
                   <div className="px-0 py-2 text-xs text-gray-500">
                     {announcement.comments.length} comentarios
-                  </div>
-                  
-                  <div>
+          </div>
+
+          <div>
                     {announcement.comments.map((comment) => (
                       <div key={comment.id} className="py-3 border-t border-[#1a1a1a]">
-                        <div className="flex">
-                          {/* Avatar */}
-                          <div className="mr-3 flex-shrink-0 mt-0.5">
-                            <img
+                <div className="flex">
+                  {/* Avatar */}
+                  <div className="mr-3 flex-shrink-0 mt-0.5">
+                      <img
                               src={comment.user_profile_image}
                               alt={comment.user_name}
-                              className="w-8 h-8 rounded-full object-cover"
-                            />
-                          </div>
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                  </div>
 
-                          {/* Contenido y reacciones */}
-                          <div className="flex-1">
-                            <div className="flex justify-between items-start">
-                              <span className="font-medium text-white text-xs">
+                  {/* Contenido y reacciones */}
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start">
+                      <span className="font-medium text-white text-xs">
                                 {comment.user_name}
-                              </span>
+                      </span>
                               <span className="text-gray-500 text-[10px]">hace {formatRelativeTime(comment.created_at)}</span>
-                            </div>
+                    </div>
                             <p className="text-gray-200 mt-1 text-xs">{comment.comment}</p>
 
                             {/* Respuestas a este comentario (si las hay) */}
@@ -520,13 +520,13 @@ const AnnouncementContent = () => {
                             }
                           </div>
                         </div>
-                      </div>
+                    </div>
                     ))}
                   </div>
                 </div>
               )}
-            </div>
-          ))}
+              </div>
+            ))}
         </div>
       </div>
     </div>

@@ -85,6 +85,15 @@ export function NotificationsPage() {
   const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
 
+  // Verificar si el usuario está autenticado al cargar la página
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) {
+      // Si no hay token, redirigir al usuario inmediatamente
+      navigate('/campaign-home');
+    }
+  }, [navigate]);
+
   // Función para obtener el número de notificaciones no leídas
   const fetchUnreadCount = useCallback(async () => {
     try {
@@ -162,7 +171,9 @@ export function NotificationsPage() {
         // Verificar que haya un token válido
         if (!token) {
           setIsAuthError(true);
-          throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
+          setLoading(false);
+          setError('No se encontró un token de autenticación. Por favor, inicia sesión.');
+          return; // Detenemos la ejecución aquí para evitar llamadas a la API sin token
         }
         
         // Intentar hacer la petición con el formato Bearer
@@ -240,13 +251,16 @@ export function NotificationsPage() {
     fetchNotifications();
     
     // También obtener el conteo de no leídas de forma separada
-    fetchUnreadCount();
+    // Solo llamamos a fetchUnreadCount si hay un token válido
+    if (getAuthToken()) {
+      fetchUnreadCount();
+    }
     
     // Limpieza al desmontar el componente
     return () => {
       ignore = true;
     };
-  }, [fetchUnreadCount]);
+  }, [fetchUnreadCount, navigate]);
 
   // Agrupar notificaciones por fecha
   useEffect(() => {
@@ -278,8 +292,8 @@ export function NotificationsPage() {
       setShowReadFeedback(true);
 
       // Llamar a la API para marcar todas las notificaciones como leídas
-      const response = await fetch(`https://contabl.net/kleep/api/notifications/mark-all-read`, {
-        method: 'PUT',
+      const response = await fetch(`https://contabl.net/kleep/api/v1/notifications/mark-all-read`, {
+        method: 'PUT', // Cambiado de POST a PUT
         headers: {
           'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -398,7 +412,7 @@ export function NotificationsPage() {
             <p className="text-red-500 text-lg mb-4">{error}</p>
             {isAuthError ? (
               <button 
-                onClick={() => navigate('/campaign-home')}
+                onClick={() => navigate('/login')}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
               >
                 Iniciar sesión

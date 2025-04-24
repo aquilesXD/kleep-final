@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { LogoIcon } from '../../components/icons';
 import { User } from "lucide-react";
 
 export default function LoginForm() {
@@ -246,7 +247,9 @@ export default function LoginForm() {
 
         <div className="text-center mb-6">
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mt-2">
-            <span className="bg-gradient-to-r from-[#8b5cf6] to-[#c084fc] bg-clip-text text-transparent">K</span>
+          <div className="logo mt-4 text-center">
+          <LogoIcon width={40} height={40} className="mx-auto" />
+        </div>
           </h1>
           <h2 className="text-white mt-4 text-xl sm:text-2xl font-bold">Iniciar sesión</h2>
         </div>
@@ -289,15 +292,7 @@ export default function LoginForm() {
              isSuccess ? "Código enviado ✓" : "Continuar"}
           </button>
         </form>
-
-        <div className="mt-6 text-center">
-          <p className="text-gray-300">
-            ¿No tienes una cuenta?{" "}
-            <Link to="/signup" className="text-[#a78bfa] hover:text-[#c4b5fd] hover:underline transition-colors">
-              Regístrate aquí
-            </Link>
-          </p>
-        </div>
+        
       </div>
     </div>
   );

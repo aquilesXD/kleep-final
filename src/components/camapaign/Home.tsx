@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Sidebar from "../../components/layout/Sidebar";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react"
 import { RewardCard } from "./RewardCard";
+import { getAuthToken } from '../../services/authService';
 
 // Definir la interfaz para las campañas
 interface Campaign {
@@ -41,9 +42,6 @@ const mapCampaignToReward = (campaign: Campaign) => {
   };
 }
 
-// Token de autenticación
-const API_TOKEN = "LdiVnsTkivJjcoEs16w5D6osE39IRbu1hJ75WjVVe2vf5JGyJFvjE0u4dojto4lq";
-
 export default function Home() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading] = useState(true)
@@ -65,10 +63,13 @@ export default function Home() {
       try {
         setLoading(true);
 
+        // Obtener el token dinámicamente
+        const token = getAuthToken();
+
         // Intentar obtener las campañas principales
         let response = await fetch('https://contabl.net/kleep/api/campaigns', {
           headers: {
-            'Authorization': `Bearer ${API_TOKEN}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
             'Accept': 'application/json',
           },
@@ -96,14 +97,12 @@ export default function Home() {
         const initialMappedRewards = allCampaigns.map(mapCampaignToReward);
         setRewards(initialMappedRewards);
 
-        // Si el usuario está autenticado, buscar las campañas a las que se ha unido
+        // Asegurar que las campañas no se marquen como "unidas" para usuarios nuevos
         if (isAuthenticated) {
           try {
-            console.log('Usuario autenticado, obteniendo campañas unidas...');
-
             const joinedResponse = await fetch('https://contabl.net/kleep/api/campaigns/joined', {
               headers: {
-                'Authorization': `Bearer ${API_TOKEN}`,
+                'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
               },
@@ -128,19 +127,34 @@ export default function Home() {
                 // Actualizar recompensas con la nueva información
                 const updatedRewards = updatedCampaigns.map(mapCampaignToReward);
                 setRewards(updatedRewards);
+              } else {
+                // Si no hay campañas unidas, asegurarse de que todas estén marcadas como no unidas
+                const updatedCampaigns = allCampaigns.map((campaign: Campaign) => ({
+                  ...campaign,
+                  is_joined: false,
+                }));
+
+                setCampaigns(updatedCampaigns);
+                setRewards(updatedCampaigns.map(mapCampaignToReward));
               }
-            } else {
-              console.log(`Error al obtener campañas unidas: ${joinedResponse.status}`);
             }
           } catch (joinedErr) {
             console.error('Error al obtener campañas unidas:', joinedErr);
           }
+        } else {
+          // Si el usuario no está autenticado, asegurarse de que todas las campañas estén marcadas como no unidas
+          const updatedCampaigns = allCampaigns.map((campaign: Campaign) => ({
+            ...campaign,
+            is_joined: false,
+          }));
+
+          setCampaigns(updatedCampaigns);
+          setRewards(updatedCampaigns.map(mapCampaignToReward));
         }
 
         setError(null);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-        console.error('Error al cargar campañas:', errorMessage);
         setError(errorMessage);
         setRewards([]);
         setTotalResults(0);

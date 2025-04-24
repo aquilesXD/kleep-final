@@ -154,6 +154,7 @@ export default function CampaignRewards() {
     };
   }, [campaignId]);
 
+  // Ajustar el manejo de errores para capturar la respuesta completa del servidor
   const handleSubmit = async () => {
     if (!videoLink) {
       toast.error("Por favor ingrese un enlace de video válido.");
@@ -162,10 +163,10 @@ export default function CampaignRewards() {
 
     try {
       setSubmitting(true);
-      
+
       // Obtener el token mediante la función getAuthToken
       const token = getAuthToken();
-      
+
       // Verificar que haya un token válido
       if (!token) {
         setIsAuthError(true);
@@ -180,6 +181,8 @@ export default function CampaignRewards() {
         tiktok_account_id: tiktokAccountId
       };
 
+      console.log('Datos enviados:', videoData); // Log para depuración
+
       // Hacer la petición para enviar el video
       const response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/submit-video`, {
         method: 'POST',
@@ -191,18 +194,23 @@ export default function CampaignRewards() {
         body: JSON.stringify(videoData)
       });
 
-      // Si el error es 401 (No autorizado), es un problema de autenticación
-      if (response.status === 401) {
-        setIsAuthError(true);
-        throw new Error('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
+      // Capturar la respuesta completa para depuración
+      const responseText = await response.text();
+      console.log('Respuesta completa del servidor:', responseText);
+
+      // Si el error es 403 (Prohibido), mostrar un mensaje claro
+      if (response.status === 403) {
+        throw new Error('Error 403: No tienes permiso para realizar esta acción.');
       }
 
       if (!response.ok) {
-        throw new Error(`Error al enviar el video (${response.status})`);
+        throw new Error(`Error al enviar el video (${response.status}): ${responseText}`);
       }
 
-      const data = await response.json();
-      
+      const data = JSON.parse(responseText);
+
+      console.log('Respuesta del servidor (JSON):', data); // Log para depuración
+
       if (data.success) {
         toast.success("¡Video enviado correctamente! Tu participación en la campaña ha sido registrada.");
         setVideoLink("");
@@ -218,7 +226,7 @@ export default function CampaignRewards() {
     } finally {
       setSubmitting(false);
     }
-  }
+  };
 
   // Calcular días restantes (ejemplo: 56 días)
   const daysLeft = 56;

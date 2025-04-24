@@ -194,10 +194,59 @@ const ProfileGeneral: React.FC = () => {
     updateProfile('phone', e.target.value);
   };
   
-  // Función para seleccionar archivo de imagen
+  // Función para manejar el cambio de imagen de perfil
   const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setNewProfilePicture(e.target.files[0]);
+      const file = e.target.files[0];
+      setNewProfilePicture(file);
+      
+      // Verificar el tipo de archivo y tamaño antes de procesarlo
+      const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      if (!validTypes.includes(file.type)) {
+        setErrors(prev => ({
+          ...prev,
+          profilePicture: 'Formato no válido. Use JPG, PNG o GIF'
+        }));
+        return;
+      }
+      
+      if (file.size > 2 * 1024 * 1024) {
+        setErrors(prev => ({
+          ...prev,
+          profilePicture: 'La imagen no debe superar los 2MB'
+        }));
+        return;
+      }
+      
+      // Convertir la imagen a base64 Data URL
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target && event.target.result) {
+          const dataUrl = event.target.result as string;
+          
+          // Actualizar el perfil con la Data URL de la imagen
+          setProfile(prevProfile => ({
+            ...prevProfile,
+            profile_picture: dataUrl
+          }));
+          
+          // Limpiar errores de imagen si todo está correcto
+          setErrors(prev => ({
+            ...prev,
+            profilePicture: undefined
+          }));
+        }
+      };
+      
+      reader.onerror = () => {
+        setErrors(prev => ({
+          ...prev,
+          profilePicture: 'Error al procesar la imagen'
+        }));
+      };
+      
+      // Iniciar la lectura del archivo como Data URL (base64)
+      reader.readAsDataURL(file);
     }
   };
   
@@ -225,15 +274,36 @@ const ProfileGeneral: React.FC = () => {
         throw new Error('No se encontró el token de autenticación');
       }
 
-      const updatedData = {
+      // Crear objeto JSON para la solicitud
+      const userData: {
+        name: string;
+        phone?: string;
+        country?: string;
+        city?: string;
+        profile_picture?: string;
+        profile_image?: string;
+      } = {
         name: profile.name,
-        phone: profile.phone,
-        country: profile.country,
-        city: profile.city,
-        profile_picture: newProfilePicture ? URL.createObjectURL(newProfilePicture) : profile.profile_picture,
+        phone: profile.phone || undefined,
+        country: profile.country || undefined,
+        city: profile.city || undefined
       };
+      
+      // Si hay una imagen de perfil, usamos su URL
+      if (profile.profile_picture) {
+        userData.profile_picture = profile.profile_picture;
+      }
 
-      const response = await axios.put(`${API_ENDPOINT}`, updatedData, {
+      // Adaptar el nombre del campo si es necesario
+      if (userData && userData.profile_picture) {
+        userData.profile_image = userData.profile_picture;
+        delete userData.profile_picture; // Eliminamos el campo que no necesita la API
+      }
+
+      // Log para depuración
+      console.log('Enviando datos:', userData);
+
+      const response = await axios.put(`${API_ENDPOINT}`, userData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -243,24 +313,17 @@ const ProfileGeneral: React.FC = () => {
       if (response.data.success) {
         setSuccess('¡Perfil actualizado exitosamente!');
         setTimeout(() => setSuccess(''), 3000); // Limpia el mensaje después de 3 segundos
+        setNewProfilePicture(null); // Limpiar la referencia a la nueva imagen
         fetchUserProfile(); // Recargar el perfil actualizado
       } else {
-        setError('No se pudo actualizar el perfil.');
+        setError(response.data.message || 'No se pudo actualizar el perfil.');
       }
     } catch (error: any) {
-      setError('Error al actualizar el perfil.');
+      console.error('Error al actualizar el perfil:', error);
+      setError(error.response?.data?.message || 'Error al actualizar el perfil.');
     } finally {
       setLoading(false);
     }
-  };
-
-  // Añadir timestamp a URL para evitar caché
-  const addTimestampToUrl = (url: string): string => {
-    if (!url) return url;
-    const timestamp = new Date().getTime();
-    return url.includes('?') 
-      ? `${url}&t=${timestamp}` 
-      : `${url}?t=${timestamp}`;
   };
 
   // Cargar el perfil al montar el componente
@@ -329,13 +392,6 @@ const ProfileGeneral: React.FC = () => {
             <label className="block text-sm text-gray-400 mb-1.5">Nombre</label>
             <div className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white">
               {profile.name || 'No especificado'}
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-1.5">Teléfono</label>
-            <div className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white">
-              {profile.email || 'No especificado'}
             </div>
           </div>
 

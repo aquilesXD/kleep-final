@@ -3,6 +3,7 @@ import { AlertTriangle, X, CheckCircle, AlertCircle, Clock, RefreshCw } from 'lu
 import tiktokVerificationService from '../../services/tiktokVerificationService';
 import { toast } from 'react-hot-toast';
 import { getAuthToken } from '../../services/authService'; // Importar la función getAuthToken
+import { useNavigate } from 'react-router-dom'; // Importar useNavigate para redirección
 
 interface TikTokAccount {
   id: string;
@@ -52,27 +53,51 @@ const ProfileConnectedAccounts = () => {
   const [lastVerificationTime, setLastVerificationTime] = useState<number | null>(null); // Nuevo estado para rastrear el tiempo del último intento
   const [timeRemaining, setTimeRemaining] = useState<number>(0); // Tiempo restante para el próximo intento
   const [countdownInterval, setCountdownInterval] = useState<ReturnType<typeof setInterval> | null>(null); // Intervalo para la cuenta regresiva
+  const navigate = useNavigate(); // Añadir navigate para redirección
 
+  // Verificar si el usuario está autenticado al cargar el componente
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) {
+      navigate('/login'); // Redirigir al login si no hay token
+      return;
+    }
+  }, [navigate]);
+
+  // Asegurar que el `account_id` esté presente y válido al cargar las cuentas
   const fetchTikTokAccounts = async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // Obtener el token de autenticación
       const authToken = getAuthToken();
       if (!authToken) {
-        throw new Error('No se encontró un token de autenticación válido.');
+        navigate('/login'); // Redirigir al login si no hay token
+        return;
       }
 
-      // Obtener cuentas de TikTok usando la nueva API
       const accountsData = await tiktokVerificationService.fetchTikTokAccountsFromNewApi();
-      setAccounts(accountsData);
 
-      // Si hay cuentas pendientes, verificar su estado actual
-      if (accountsData.some(acc => acc.verifiedStatus === 'pending')) {
+      // Validar que cada cuenta tenga un `account_id` válido
+      const validatedAccounts = accountsData.map(account => {
+        if (!account.account_id) {
+          return { ...account, account_id: account.id || '' }; // Convertir `null` a cadena vacía
+        }
+        return account;
+      });
+
+      setAccounts(validatedAccounts as TikTokAccount[]); // Asegurar el tipo correcto
+
+      if (validatedAccounts.some(acc => acc.verifiedStatus === 'pending')) {
         setTimeout(() => checkPendingAccountsStatus(), 1000);
       }
     } catch (error: any) {
+      // Si es error de autenticación, redirigir al login
+      if (error.message?.includes('401') || error.message?.includes('No autorizado') || error.message?.includes('token')) {
+        toast.error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+        navigate('/login');
+        return;
+      }
       setError(`Error al cargar cuentas: ${error.message}`);
     } finally {
       setIsLoading(false);
@@ -84,6 +109,13 @@ const ProfileConnectedAccounts = () => {
     setError(null);
 
     try {
+      // Verificar token primero
+      const authToken = getAuthToken();
+      if (!authToken) {
+        navigate('/login'); // Redirigir al login si no hay token
+        return;
+      }
+      
       // Llamar a la función para obtener cuentas no verificadas
       const unverifiedAccounts = await tiktokVerificationService.fetchUnverifiedTikTokAccounts();
 
@@ -94,6 +126,12 @@ const ProfileConnectedAccounts = () => {
         return [...prevAccounts, ...filteredAccounts];
       });
     } catch (error: any) {
+      // Si es error de autenticación, redirigir al login
+      if (error.message?.includes('401') || error.message?.includes('No autorizado') || error.message?.includes('token')) {
+        toast.error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+        navigate('/login');
+        return;
+      }
       setError(`Error al cargar cuentas no verificadas: ${error.message}`);
     } finally {
       setIsLoading(false);
@@ -258,8 +296,8 @@ const ProfileConnectedAccounts = () => {
 
     setSelectedAccount(account);
 
-    // Usar el código existente
-    setVerificationCode(account.tiktok_code || tiktokVerificationService.generateVerificationCode());
+    // Usar el código proporcionado por el backend
+    setVerificationCode(account.tiktok_code || "");
 
     setShowVerificationModal(true);
     setVerificationStatus('idle');
@@ -306,7 +344,7 @@ const ProfileConnectedAccounts = () => {
   };
 
   // Función para actualizar el estado de una cuenta
-  const updateAccountStatus = (accountId: string, isVerified: boolean, isPending: boolean = true) => {
+  const updateAccountStatus = (accountId: string, isVerified: boolean, isPending: boolean = true, tiktokCode: string = "") => {
     setAccounts(prev => 
       prev.map(acc =>
         acc.id === accountId
@@ -314,7 +352,8 @@ const ProfileConnectedAccounts = () => {
               ...acc,
               isVerified: isVerified,
               verifiedStatus: isPending && !isVerified ? 'pending' : undefined,
-              verified_request: isPending && !isVerified ? new Date().toISOString() : undefined
+              verified_request: isPending && !isVerified ? new Date().toISOString() : undefined,
+              tiktok_code: tiktokCode || acc.tiktok_code // Mantener o actualizar el código
             }
           : acc
       )
@@ -325,12 +364,31 @@ const ProfileConnectedAccounts = () => {
   const handleAccountVerification = async (isManualCheck = false) => {
     if (!selectedAccount) return;
 
-    // Verificar que account_id existe
-    if (!selectedAccount.account_id) {
-      setVerificationStatus('error');
-      setStatusMessage('Error: ID de cuenta inválido');
+    // Verificar token de autenticación
+    const authToken = getAuthToken();
+    if (!authToken) {
+      toast.error('No hay sesión activa. Por favor, inicia sesión.');
+      navigate('/login');
       return;
     }
+
+    // Verificar que `account_id` exista y sea válido
+    if (!selectedAccount.account_id) {
+      setVerificationStatus('error');
+      setStatusMessage('Error: La cuenta seleccionada no tiene un ID válido.');
+      return;
+    }
+
+    // Verificar que tengamos un código de verificación
+    if (!verificationCode && !isManualCheck) {
+      setVerificationStatus('error');
+      setStatusMessage('Error: No hay código de verificación disponible. Intenta refrescar la página.');
+      return;
+    }
+
+    // Guardar el código de verificación original antes de hacer cualquier petición
+    const originalVerificationCode = verificationCode;
+    console.log(`Código de verificación original antes de petición: ${originalVerificationCode}`);
 
     // Verificar tiempo mínimo entre verificaciones
     const now = new Date().getTime();
@@ -375,18 +433,58 @@ const ProfileConnectedAccounts = () => {
         result = { success: true, isVerified, message: isVerified ? 'Verificación exitosa' : 'No se encontró el código en el perfil' };
       } else {
         // Solicitud inicial de verificación
-        result = await tiktokVerificationService.requestTikTokVerification(
-          selectedAccount.account_id,
-          verificationCode,
-          tiktokUsername
-        );
+        try {
+          // Usar el código original en la petición
+          result = await tiktokVerificationService.requestTikTokVerification(
+            selectedAccount.account_id,
+            originalVerificationCode, // Usar el código original para la solicitud
+            tiktokUsername
+          );
+          
+          // IMPORTANTE: NO actualizar el código de verificación con el recibido del backend
+          // Si la respuesta contiene un código diferente, ignorarlo y mantener el original
+          if (result.account?.tiktok_code && result.account.tiktok_code !== originalVerificationCode) {
+            console.log(`El backend envió un código diferente (${result.account.tiktok_code}), pero mantenemos el original (${originalVerificationCode})`);
+          }
+        } catch (verificationError: any) {
+          // Si hay un error 422, intentar con el método alternativo
+          if (verificationError.message && verificationError.message.includes('422')) {
+            console.log('Intentando método alternativo debido a error 422');
+            // Intentar con el método alternativo requestTikTokAccountVerification
+            const alternativeResult = await tiktokVerificationService.requestTikTokAccountVerification(
+              tiktokUsername,
+              5000, // Número estimado de seguidores
+              `https://www.tiktok.com/@${tiktokUsername}`
+            );
+            
+            if (alternativeResult.success) {
+              result = {
+                success: true,
+                message: alternativeResult.message,
+                account: alternativeResult.account,
+                isVerified: false
+              };
+              
+              // IMPORTANTE: Seguir manteniendo el código original aunque el servidor envíe uno nuevo
+              if (alternativeResult.verification_code && alternativeResult.verification_code !== originalVerificationCode) {
+                console.log(`El backend envió un código diferente (${alternativeResult.verification_code}), pero mantenemos el original (${originalVerificationCode})`);
+              }
+            } else {
+              throw verificationError; // Re-lanzar el error original si el alternativo también falla
+            }
+          } else {
+            throw verificationError; // Re-lanzar cualquier otro tipo de error
+          }
+        }
+        
         // Para solicitudes iniciales, siempre el estado es pendiente
         result = { ...result, isVerified: false };
       }
 
       // Actualizar estado según resultado
       if (result.success) {
-        updateAccountStatus(selectedAccount.id, result.isVerified, !result.isVerified);
+        // IMPORTANTE: Siempre mantener el código de verificación original en la cuenta
+        updateAccountStatus(selectedAccount.id, result.isVerified, !result.isVerified, originalVerificationCode);
         
         setVerificationStatus('success');
         setStatusMessage(result.isVerified 
@@ -410,7 +508,7 @@ const ProfileConnectedAccounts = () => {
           // Para verificación inicial, mostrar mensaje de instrucciones
           setTimeout(() => {
             setShowVerificationModal(false);
-            toast.success('Verificación enviada. Coloca el código en tu bio de TikTok.');
+            toast.success(`Verificación enviada. Coloca el código ${originalVerificationCode} en tu bio de TikTok.`);
           }, 2000);
         }
       } else {
@@ -418,6 +516,29 @@ const ProfileConnectedAccounts = () => {
         setStatusMessage(result.message || 'Error en la verificación');
       }
     } catch (error: any) {
+      // Si es error de autenticación, redirigir al login
+      if (error.message?.includes('401') || error.message?.includes('No autorizado') || error.message?.includes('token')) {
+        toast.error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+        navigate('/login');
+        return;
+      }
+
+      // Manejo específico para error 422
+      if (error.message?.includes('422')) {
+        setVerificationStatus('error');
+        let errorMessage = 'Datos de verificación rechazados por el servidor.';
+        
+        // Intentar extraer un mensaje más específico
+        const detailMatch = error.message.match(/Error 422: (.+)/);
+        if (detailMatch && detailMatch[1]) {
+          errorMessage = detailMatch[1];
+        }
+        
+        setStatusMessage(errorMessage);
+        console.error('Error 422 en verificación:', error.message);
+        return;
+      }
+      
       setVerificationStatus('error');
       setStatusMessage(error.message || 'Error al procesar la verificación');
     } finally {
@@ -429,12 +550,30 @@ const ProfileConnectedAccounts = () => {
   const handleVerifyAccount = () => handleAccountVerification(false);
   
   // Intentar verificación manual (antes handleManualCheck)
-  const handleManualCheck = () => handleAccountVerification(true);
+  const handleManualCheck = async (accountId: string) => {
+    const account = accounts.find(acc => acc.id === accountId);
+    if (!account) return;
+
+    setSelectedAccount(account);
+    // Usar el código proporcionado por el backend
+    setVerificationCode(account.tiktok_code || "");
+    setShowVerificationModal(true);
+    setVerificationStatus('idle');
+    setStatusMessage('');
+  };
 
   // Función para reiniciar el proceso de verificación
   const handleResetVerification = async () => {
     if (!selectedAccount) return;
 
+    // Verificar token de autenticación
+    const authToken = getAuthToken();
+    if (!authToken) {
+      toast.error('No hay sesión activa. Por favor, inicia sesión.');
+      navigate('/login');
+      return;
+    }
+    
     setIsSubmitting(true);
     setVerificationStatus('loading');
     setStatusMessage('Reiniciando proceso de verificación...');
@@ -493,6 +632,13 @@ const ProfileConnectedAccounts = () => {
         setStatusMessage(result.message || 'Error al reiniciar la verificación');
       }
     } catch (error: any) {
+      // Si es error de autenticación, redirigir al login
+      if (error.message?.includes('401') || error.message?.includes('No autorizado') || error.message?.includes('token')) {
+        toast.error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+        navigate('/login');
+        return;
+      }
+      
       setVerificationStatus('error');
       setStatusMessage(error.message || 'Error al reiniciar el proceso. Inténtalo más tarde.');
     } finally {
@@ -500,35 +646,76 @@ const ProfileConnectedAccounts = () => {
     }
   };
 
+  // Actualizar la función para manejar la solicitud de verificación con la URL correcta
   const handleRequestVerification = async (accountId: string) => {
     try {
+      // Verificar token de autenticación
+      const authToken = getAuthToken();
+      if (!authToken) {
+        toast.error('No hay sesión activa. Por favor, inicia sesión.');
+        navigate('/login');
+        return;
+      }
+      
       setIsSubmitting(true);
       setVerificationStatus('loading');
       setStatusMessage('Enviando solicitud de verificación...');
 
-      const result = await tiktokVerificationService.requestTikTokAccountVerification(accountId);
+      // Obtener los datos de la cuenta seleccionada
+      const account = accounts.find(acc => acc.id === accountId);
+      if (!account) {
+        throw new Error('Cuenta no encontrada.');
+      }
 
-      if (result.success) {
-        setAccounts((prevAccounts) =>
-          prevAccounts.map((account) =>
-            account.id === accountId
+      // Llamar al servicio para solicitar la verificación
+      const result = await tiktokVerificationService.requestTikTokAccountVerification(
+        account.username,
+        5000, // Número de seguidores (puedes ajustar este valor según sea necesario)
+        `https://www.tiktok.com/${account.username}`
+      );
+
+      if (result.success && result.account) {
+        // Obtener el código de verificación recibido del backend
+        const receivedCode = result.verification_code || result.account.tiktok_code || "";
+        console.log(`Código de verificación recibido del backend: ${receivedCode}`);
+        
+        if (!receivedCode) {
+          throw new Error('No se recibió un código de verificación válido del servidor.');
+        }
+        
+        // Guardar el código de verificación original para futuras referencias
+        const originalVerificationCode = receivedCode;
+        
+        // Actualizar el estado de la cuenta con los datos recibidos
+        setAccounts(prevAccounts =>
+          prevAccounts.map(acc =>
+            acc.id === accountId
               ? {
-                  ...account,
+                  ...acc,
                   verifiedStatus: 'pending',
-                  tiktok_code: result.verification_code,
+                  tiktok_code: originalVerificationCode, // Almacenar el código recibido como código original
                   verified_request: new Date().toISOString(),
                 }
-              : account
+              : acc
           )
         );
 
         setVerificationStatus('success');
-        setStatusMessage(result.message);
+        setStatusMessage('Solicitud de verificación enviada correctamente.');
+        
+        // Mostrar el código en toast con información clara
+        toast.success(`Tu código de verificación es: ${originalVerificationCode}. Colócalo en tu bio de TikTok.`);
       } else {
-        setVerificationStatus('error');
-        setStatusMessage(result.message || 'Error al solicitar la verificación.');
+        throw new Error(result.message || 'Error al solicitar la verificación.');
       }
     } catch (error: any) {
+      // Si es error de autenticación, redirigir al login
+      if (error.message?.includes('401') || error.message?.includes('No autorizado') || error.message?.includes('token')) {
+        toast.error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+        navigate('/login');
+        return;
+      }
+      
       setVerificationStatus('error');
       setStatusMessage(error.message || 'Error desconocido al solicitar la verificación.');
     } finally {
@@ -545,11 +732,22 @@ const ProfileConnectedAccounts = () => {
           <span>Verificada</span>
         </div>
       );
-    } else if (account.verifiedStatus === 'pending') {
+    } else if (account.verifiedStatus === 'pending' && (account.verified_att || 0) < 3) {
       return (
-        <div className="flex items-center text-yellow-500 text-sm mt-2">
-          <Clock className="w-4 h-4 mr-1" />
-          <span>Verificación pendiente</span>
+        <div className="mt-2 flex items-center justify-center">
+          <button
+            className="text-indigo-400 text-sm hover:underline"
+            onClick={() => handleManualCheck(account.id)}
+          >
+            Verificar
+          </button>
+        </div>
+      );
+    } else if (account.verifiedStatus === 'pending' && (account.verified_att || 0) >= 3) {
+      return (
+        <div className="flex items-center text-orange-500 text-sm mt-2">
+          <AlertTriangle className="w-4 h-4 mr-1" />
+          <span>Límite de intentos alcanzado</span>
         </div>
       );
     } else {
@@ -560,7 +758,7 @@ const ProfileConnectedAccounts = () => {
             className="text-indigo-400 text-sm hover:underline"
             onClick={() => handleRequestVerification(account.id)}
           >
-          Verificar
+            Verificar
           </button>
         </div>
       );
@@ -775,7 +973,7 @@ const ProfileConnectedAccounts = () => {
 
               {selectedAccount && selectedAccount.verifiedStatus === 'pending' && !(typeof selectedAccount.verified_att === 'number' && selectedAccount.verified_att >= 3) && (
                 <button
-                  onClick={handleManualCheck}
+                  onClick={() => handleManualCheck(selectedAccount.id)}
                   className={`w-full mt-2 bg-[#1c1c1c] hover:bg-[#2c2c2c] text-white py-3 px-4 rounded-md text-center transition-colors ${(isSubmitting || timeRemaining > 0) ? 'opacity-70 cursor-not-allowed' : ''}`}
                   disabled={isSubmitting || verificationStatus === 'success' || timeRemaining > 0}
                 >

@@ -332,8 +332,8 @@ const WhopCreatorsModal = ({ onClose, reward }: WhopCreatorsModalProps) => {
                 </span>
               </button>
             ) : isAlreadyJoined ? (
-              <button
-                className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-4 rounded"
+            <button
+              className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-4 rounded"
                 onClick={handleViewCampaign}
               >
                 Ver mi campaña
@@ -343,7 +343,7 @@ const WhopCreatorsModal = ({ onClose, reward }: WhopCreatorsModalProps) => {
                 className={`w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-4 rounded ${
                   isJoining ? 'opacity-70 cursor-not-allowed' : ''
                 }`}
-                onClick={handleJoinCampaign}
+              onClick={handleJoinCampaign}
                 disabled={isJoining}
               >
                 {isJoining ? (
@@ -357,7 +357,7 @@ const WhopCreatorsModal = ({ onClose, reward }: WhopCreatorsModalProps) => {
                 ) : (
                   'Unirse a esta campaña'
                 )}
-              </button>
+            </button>
             )}
             
             <button
