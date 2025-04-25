@@ -493,11 +493,7 @@ export function NotificationsPage() {
         {/* Header Principal */}
         <div className="sticky top-0 z-10 bg-[#121212] border-b border-[#1c1c1c] px-4 py-3 flex justify-between items-center">
           <h1 className="text-xl font-bold">Notificaciones</h1>
-          {unreadCount > 0 && (
-            <div className="bg-blue-600 text-white text-xs font-medium px-2 py-1 rounded-full">
-              {unreadCount} no leídas
-            </div>
-          )}
+          
         </div>
 
         {/* Barra de navegación simplificada */}

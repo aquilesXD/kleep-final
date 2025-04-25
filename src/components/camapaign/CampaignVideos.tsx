@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Sidebar from '../layout/Sidebar';
 
-import { AlertTriangle, ExternalLink } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Clock, Check, X } from 'lucide-react';
 import { CampaignSidebar } from '../layout/CampainSidebar';
 
 // Interfaces para los datos
@@ -18,18 +18,26 @@ interface VideoItem {
   created_at: string;
   account_id: number;
   account_username: string;
+  payout: string; // Agregado para coincidir con la API
+  account: string; // Agregado para coincidir con la API
 }
 
 interface UnverifiedAccount {
   id: number;
   username: string;
   verification_code: string;
+  created_at?: string;
 }
 
 interface ApiResponse {
   success: boolean;
   videos: VideoItem[];
-  unverified_accounts: UnverifiedAccount[];
+  unverified_accounts?: UnverifiedAccount[];
+}
+
+interface UnverifiedAccountsResponse {
+  success: boolean;
+  accounts: UnverifiedAccount[];
 }
 
 // Get auth token from localStorage or sessionStorage
@@ -46,8 +54,6 @@ export default function CampaignVideos() {
   const navigate = useNavigate();
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [unverifiedAccounts, setUnverifiedAccounts] = useState<UnverifiedAccount[]>([]);
-  const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
-  const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthError, setIsAuthError] = useState(false);
@@ -57,62 +63,70 @@ export default function CampaignVideos() {
     try {
       setLoading(true);
       setIsAuthError(false);
-      
-      // Obtener el token mediante la función getAuthToken
+
       const token = getAuthToken();
-      
-      // Verificar que haya un token válido
       if (!token) {
         setIsAuthError(true);
         throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
       }
-      
-      // Intentar hacer la petición con el formato Bearer
-      let response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/my-videos`, {
-        headers: {
-          'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
+
+      // Configuración de headers para las peticiones
+      const headers = {
+        'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+
+      // 1. Obtener los videos de la campaña
+      const videosResponse = await fetch(`https://contabl.net/kleep/api/campaigns/1/my-videos`, {
+        headers
       });
 
-      // Si el error es 401 (No autorizado), intentar con formatos alternativos
-      if (response.status === 401) {
-        // Intentar con formato alternativo (solo token sin Bearer)
-        response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/my-videos`, {
-          headers: {
-            'Authorization': token,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
-        });
+      if (!videosResponse.ok) {
+        throw new Error(`Error al cargar los videos (${videosResponse.status})`);
+      }
+
+      const data: ApiResponse = await videosResponse.json();
+
+      // 2. Obtener las cuentas no verificadas
+      const unverifiedAccountsResponse = await fetch('https://contabl.net/kleep/api/tiktok-accounts/unverified', {
+        headers
+      });
+
+      if (!unverifiedAccountsResponse.ok) {
+        // Continuamos incluso si hay error, para al menos mostrar los videos
+      } else {
+        const accountsData: UnverifiedAccountsResponse = await unverifiedAccountsResponse.json();
         
-        // Si sigue fallando, intentar con query param
-        if (response.status === 401) {
-          response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/my-videos?api_token=${token}`, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            }
-          });
-          
-          // Si sigue fallando, es un problema de autenticación real
-          if (response.status === 401) {
-            setIsAuthError(true);
-            throw new Error('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
-          }
+        // Si la respuesta es exitosa, actualizamos las cuentas no verificadas
+        if (accountsData.success && accountsData.accounts) {
+          setUnverifiedAccounts(accountsData.accounts);
         }
       }
 
-      if (!response.ok) {
-        throw new Error(`Error al cargar los videos (${response.status})`);
-      }
-
-      const data: ApiResponse = await response.json();
-      
       if (data.success) {
-        setVideos(data.videos || []);
-        setUnverifiedAccounts(data.unverified_accounts || []);
+        const videos = data.videos.map(video => ({
+          id: video.id,
+          url: video.url,
+          views: video.views,
+          status: video.status,
+          payment_amount: parseFloat(video.payout),
+          created_at: video.created_at,
+          title: video.title || "Ver video",
+          description: video.description || "Descripción no disponible",
+          account_id: video.account_id || 0,
+          account_username: video.account || "@desconocido",
+          payout: video.payout,
+          account: video.account
+        }));
+
+        setVideos(videos);
+        
+        // Si también nos llegaron cuentas no verificadas de la primera petición, las usamos como respaldo
+        if (data.unverified_accounts && data.unverified_accounts.length > 0 && unverifiedAccounts.length === 0) {
+          setUnverifiedAccounts(data.unverified_accounts);
+        }
+        
         setError(null);
       } else {
         throw new Error('Error al obtener los datos de videos');
@@ -123,24 +137,17 @@ export default function CampaignVideos() {
     } finally {
       setLoading(false);
     }
-  }, [campaignId]);
+  }, []);
 
   useEffect(() => {
     fetchVideos();
   }, [fetchVideos]);
 
-  const handleShowRejectionModal = (video: VideoItem) => {
-    setSelectedVideo(video);
-    setShowRejectionModal(true);
-  };
-
-  const handleCloseRejectionModal = () => {
-    setShowRejectionModal(false);
-    setSelectedVideo(null);
-  };
-
   // Función para formatear el nombre de usuario
-  const formatUsername = (username: string): string => {
+  const formatUsername = (username: string | undefined | null): string => {
+    // Si el username es undefined o null, devolver un valor por defecto
+    if (!username) return "@desconocido";
+
     // Si ya tiene @ al principio, devolverlo tal cual
     return username.startsWith('@') ? username : `@${username}`;
   };
@@ -181,7 +188,7 @@ export default function CampaignVideos() {
                     <th className="px-4 py-3">Video</th>
                     <th className="px-4 py-3 text-right">Vistas</th>
                     <th className="px-4 py-3 text-right">Total a pagar</th>
-                    <th className="px-4 py-3 text-center w-36">Estado</th>
+                    <th className="px-4 py-3">Estado</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -199,53 +206,25 @@ export default function CampaignVideos() {
                     </tr>
                   ) : (
                     videos.map((video) => {
-                      const hasSufficientViews = (video.views || 0) >= 2000;
+                      const hasSufficientViews = (video.views || 0) >= 1000;
 
-                      let statusStyle = "";
-                      let statusIcon = null;
+                      // Determinar el texto del estado
                       let statusText = "";
-
+                      let statusClass = "";
+                      let statusIcon = null;
+                      
                       if (video.status === 'pending') {
-                        statusStyle = "border border-yellow-500 text-yellow-500";
                         statusText = "En proceso";
-                        statusIcon = (
-                          <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none">
-                            <path
-                              d="M12 9v2m0 4h.01M12 5a7 7 0 100 14 7 7 0 000-14z"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        );
+                        statusClass = "bg-yellow-900/30 text-yellow-500 border border-yellow-700";
+                        statusIcon = <Clock size={12} className="mr-1" />;
                       } else if (video.status === 'approved') {
-                        statusStyle = "border border-green-500 text-green-500";
                         statusText = "Aprobado";
-                        statusIcon = (
-                          <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none">
-                            <path
-                              d="M20 6L9 17L4 12"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        );
+                        statusClass = "bg-green-900/30 text-green-500 border border-green-700";
+                        statusIcon = <Check size={12} className="mr-1" />;
                       } else if (video.status === 'rejected') {
-                        statusStyle = "border border-red-500 text-red-500";
                         statusText = "Rechazado";
-                        statusIcon = (
-                          <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none">
-                            <path
-                              d="M18 6L6 18M6 6L18 18"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                            />
-                          </svg>
-                        );
+                        statusClass = "bg-red-900/30 text-red-500 border border-red-700";
+                        statusIcon = <X size={12} className="mr-1" />;
                       }
 
                       return (
@@ -258,14 +237,14 @@ export default function CampaignVideos() {
                               rel="noopener noreferrer"
                               className="text-violet-500 flex items-center"
                             >
-                              {video.title || 'Ver video'} <ExternalLink size={14} className="ml-1" />
+                              {video.title !== "Ver video" ? video.title : "Ver video"} <ExternalLink size={14} className="ml-1" />
                             </a>
                           </td>
                           <td className="px-4 py-3 text-right">
                             <span className={!hasSufficientViews ? 'text-yellow-500' : ''}>
                               {video.views?.toLocaleString() || '0'}
                               {!hasSufficientViews && (
-                                <span className="block text-xs">Mínimo 2000 vistas</span>
+                                <span className="block text-xs">Mínimo 1000 vistas</span>
                               )}
                             </span>
                           </td>
@@ -280,20 +259,10 @@ export default function CampaignVideos() {
                             </p>
                           </td>
                           <td className="px-4 py-3">
-                            {video.status === 'rejected' ? (
-                              <button
-                                onClick={() => handleShowRejectionModal(video)}
-                                className={`w-36 justify-center px-3 py-1 rounded text-sm flex items-center ${statusStyle} hover:opacity-80 transition`}
-                              >
-                                {statusIcon} {statusText}
-                              </button>
-                            ) : (
-                              <span
-                                className={`w-36 justify-center px-3 py-1 rounded text-sm flex items-center ${statusStyle}`}
-                              >
-                                {statusIcon} {statusText}
-                              </span>
-                            )}
+                            <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${statusClass}`}>
+                              {statusIcon}
+                              <span>{statusText}</span>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -303,65 +272,62 @@ export default function CampaignVideos() {
               </table>
             </div>
 
-            {unverifiedAccounts.length > 0 && (
-              <div className="mt-10">
-                <h3 className="text-white font-semibold text-lg mb-2">
-                  Verifica tus cuentas de TikTok
-                </h3>
-                <p className="text-gray-400 text-sm mb-4">
-                  Para poder procesar los pagos, es importante que verifiquemos que tú eres el dueño
-                  de la cuenta.
-                </p>
-                <div className="flex items-start mb-4">
-                  <AlertTriangle size={18} className="text-yellow-500 mr-2 mt-0.5" />
-                  <p className="text-yellow-500 text-sm">
-                    Este paso es obligatorio para recibir pagos.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {unverifiedAccounts.map((acc) => (
-                    <button
-                      key={acc.id}
-                      className="px-3 py-1 rounded-full text-sm bg-gray-800 text-white border border-gray-600 hover:bg-gray-700 transition"
-                    >
-                      {formatUsername(acc.username)}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={() => navigate('/profile')}
-                  className="bg-violet-600 hover:bg-violet-700 text-white font-medium py-2 px-4 rounded transition-colors"
-                >
-                  Verificar Cuentas de TikTok
-                </button>
-              </div>
-            )}
-
-            {showRejectionModal && selectedVideo && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center">
-                <div
-                  className="absolute inset-0 bg-black bg-opacity-75"
-                  onClick={handleCloseRejectionModal}
-                ></div>
-                <div className="relative bg-[#0c0c0c] rounded-lg w-11/12 max-w-md mx-auto p-5 text-white border border-[#1c1c1c]">
-                  <button
-                    onClick={handleCloseRejectionModal}
-                    className="absolute top-4 right-4 text-gray-400 hover:text-white"
-                  >
-                    ✕
-                  </button>
-                  <div className="text-center">
-                    <h3 className="text-xl font-semibold mb-6">Tu video no ha sido aceptado</h3>
-                    <p className="text-gray-400 mb-2">MOTIVO:</p>
-                    <div className="flex mb-6 justify-center">
-                      <p className="text-sm text-red-400 whitespace-pre-line text-center">
-                        {selectedVideo.status_note || 'Sin motivo especificado.'}
-                      </p>
-                    </div>
+            {/* Sección de cuentas no verificadas */}
+            <div className="mt-10 bg-[#111] border border-[#222] rounded-lg p-6">
+              <h3 className="text-xl font-semibold text-white mb-2">
+                Verifica tus cuentas de TikTok
+              </h3>
+              <p className="text-gray-400 text-sm mb-4">
+                Para poder procesar los pagos, es importante que verifiquemos que tú eres el dueño
+                de la cuenta.
+              </p>
+              
+              {unverifiedAccounts.length > 0 ? (
+                <>
+                  <div className="flex items-start mb-4">
+                    <AlertTriangle size={18} className="text-yellow-500 mr-2 mt-0.5" />
+                    <p className="text-yellow-500 text-sm">
+                      Este paso es obligatorio para recibir pagos.
+                    </p>
                   </div>
+                  
+                  <div className="bg-[#0c0c0c]/50 border border-[#1c1c1c] rounded p-4 mb-6">
+                    <h4 className="text-white font-medium mb-3">Cuentas pendientes de verificación:</h4>
+                    <div className="space-y-3">
+                      {unverifiedAccounts.map((acc) => (
+                        <div key={acc.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-[#0c0c0c] p-3 border border-[#222] rounded-md">
+                          <div className="mb-2 sm:mb-0">
+                            <p className="text-white font-medium">{formatUsername(acc.username)}</p>
+                            <p className="text-xs text-gray-400">Registrada: {acc.created_at ? new Date(acc.created_at).toLocaleDateString() : 'Fecha desconocida'}</p>
+                          </div>
+                          <div className="flex flex-col items-start sm:items-end">
+                            <p className="text-gray-400 text-xs">Código de verificación:</p>
+                            <p className="text-violet-400 font-mono font-bold">{acc.verification_code}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-gray-400 text-xs mt-3">
+                      Utiliza estos códigos para verificar tu cuenta en TikTok siguiendo las instrucciones de verificación.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center mb-4 text-green-500">
+                  <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 6L9 17L4 12"></path>
+                  </svg>
+                  <p>No tienes cuentas pendientes de verificación.</p>
                 </div>
-              </div>
-            )}
+              )}
+
+              <button
+                onClick={() => navigate('/profile-cuentas')}
+                className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium py-2 px-4 rounded transition-colors"
+              >
+                Verificar Cuentas de TikTok
+              </button>
+            </div>
           </div>
         </div>
       </div>

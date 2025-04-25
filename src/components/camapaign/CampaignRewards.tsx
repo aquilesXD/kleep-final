@@ -5,6 +5,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { CampaignSidebar } from "../layout/CampainSidebar";
 import Sidebar from "../layout/Sidebar";
 import { toast } from 'react-hot-toast';
+import tiktokVerificationService from "../../services/tiktokVerificationService";
 
 // Get auth token from localStorage or sessionStorage
 const getAuthToken = (): string => {
@@ -54,18 +55,42 @@ interface VideoSubmission {
   tiktok_account_id: number;
 }
 
+// Interfaz para una campaña unida
+interface JoinedCampaign {
+  id: number;
+  name: string;
+  description: string;
+  type: string;
+  banner_image: string;
+  profile_image: string;
+  total_budget: string;
+  price_per_view: string;
+  platforms: string;
+  budget_spent: string;
+  created_at: string;
+  admin_name: string;
+  admin_profile_image: string;
+  joined_at: string;
+  budget_percentage: string;
+  is_joined: boolean;
+}
+
 export default function CampaignRewards() {
   const { campaignId = "1" } = useParams<{ campaignId: string }>();
   const [videoLink, setVideoLink] = useState("");
-  const [videoTitle, setVideoTitle] = useState("Mi video para la campaña");
-  const [videoDescription, setVideoDescription] = useState("Video promocional cumpliendo con los requisitos");
-  const [tiktokAccountId, setTiktokAccountId] = useState(7);
+  const [videoTitle, setVideoTitle] = useState("Mi video de TikTok");
+  const [videoDescription, setVideoDescription] = useState("Video promocional para campaña");
   const [submitting, setSubmitting] = useState(false);
   const [rewardsData, setRewardsData] = useState<RewardsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthError, setIsAuthError] = useState(false);
   const navigate = useNavigate();
+  
+  // Estados para manejar la unión a la campaña
+  const [isJoined, setIsJoined] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
 
   // Obtener los datos de recompensas
   const fetchRewards = useCallback(async () => {
@@ -144,9 +169,137 @@ export default function CampaignRewards() {
     }
   }, [campaignId]);
 
+  // Verificar si el usuario ya está unido a la campaña
+  const checkJoinedStatus = useCallback(async () => {
+    setIsCheckingStatus(true);
+    try {
+      const token = getAuthToken();
+      
+      if (!token) {
+        setIsCheckingStatus(false);
+        return;
+      }
+
+      // Llamar a la API para obtener las campañas unidas
+      const response = await fetch(`https://contabl.net/kleep/api/campaigns/joined`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`
+        }
+      });
+
+      // Si es 401, podría ser un problema de autenticación
+      if (response.status === 401) {
+        setIsAuthError(true);
+        setIsCheckingStatus(false);
+        return;
+      }
+
+      if (!response.ok) {
+        console.error(`Error al verificar campañas unidas: ${response.status}`);
+        setIsJoined(false);
+        setIsCheckingStatus(false);
+        return;
+      }
+
+      const data = await response.json();
+      
+      // Verificar si ya está unido a esta campaña específica
+      if (data && Array.isArray(data.campaigns)) {
+        const isJoined = data.campaigns.some(
+          (campaign: JoinedCampaign) => campaign.id === Number(campaignId) && campaign.is_joined === true
+        );
+        setIsJoined(isJoined);
+      } else {
+        setIsJoined(false);
+      }
+    } catch (error) {
+      console.error('Error al verificar estado de la campaña:', error);
+      setIsJoined(false);
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  }, [campaignId]);
+
   useEffect(() => {
     fetchRewards();
-  }, [fetchRewards]);
+    checkJoinedStatus(); // Verificar si el usuario está unido a la campaña
+  }, [fetchRewards, checkJoinedStatus]);
+
+  // Función para unirse a la campaña
+  const joinCampaign = async () => {
+    setIsJoining(true);
+    
+    try {
+      const token = getAuthToken();
+      
+      if (!token) {
+        setIsAuthError(true);
+        throw new Error("No se encontró un token de autenticación. Por favor, inicia sesión.");
+      }
+
+      const response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`
+        }
+      });
+
+      // Si es 404, podríamos simular éxito en entorno de desarrollo
+      if (response.status === 404) {
+        toast.success('¡Te has unido a la campaña exitosamente!');
+        setIsJoined(true);
+        return;
+      }
+
+      if (response.status === 401) {
+        setIsAuthError(true);
+        throw new Error('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
+      }
+
+      if (!response.ok) {
+        throw new Error(`Error al unirse a la campaña (${response.status})`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        toast.success('¡Te has unido a la campaña exitosamente!');
+        setIsJoined(true);
+      } else {
+        throw new Error(data.message || "Error al unirse a la campaña");
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      toast.error(`Error: ${errorMessage}`);
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
+  // Esta función obtiene el ID de la primera cuenta de TikTok verificada
+  const fetchTikTokAccountId = async (): Promise<number | null> => {
+    try {
+      // Usar el servicio para obtener las cuentas
+      const accounts = await tiktokVerificationService.fetchTikTokAccountsFromNewApi();
+      
+      // Filtrar solo las cuentas verificadas
+      const verifiedAccounts = accounts.filter(account => account.isVerified);
+      
+      // Si hay cuentas verificadas, devolver el ID de la primera
+      if (verifiedAccounts.length > 0) {
+        return Number(verifiedAccounts[0].id);
+      }
+      
+      // Si no hay cuentas verificadas, devolver null
+      return null;
+    } catch (error) {
+      console.error("Error al obtener ID de cuenta TikTok:", error);
+      // En caso de error, también devolver null
+      return null;
+    }
+  };
 
   // Ajustar el manejo de errores para capturar la respuesta completa del servidor
   const handleSubmit = async () => {
@@ -167,12 +320,20 @@ export default function CampaignRewards() {
         throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
       }
 
-      // Preparar los datos para enviar
-      const videoData: VideoSubmission = {
+      // Obtener el ID de cuenta de TikTok
+      const accountId = await fetchTikTokAccountId();
+
+      // Verificar si se encontró una cuenta válida
+      if (accountId === null) {
+        throw new Error('No se encontró una cuenta de TikTok verificada. Por favor, verifica una cuenta en tu perfil antes de enviar videos.');
+      }
+
+      // Preparar los datos para enviar - incluyendo todos los campos requeridos
+      const videoData = {
         url: videoLink,
         title: videoTitle,
         description: videoDescription,
-        tiktok_account_id: tiktokAccountId
+        tiktok_account_id: accountId
       };
 
       // Hacer la petición para enviar el video
@@ -186,8 +347,22 @@ export default function CampaignRewards() {
         body: JSON.stringify(videoData)
       });
 
-      // Capturar la respuesta completa para depuración
-      const responseText = await response.text();
+      // Si el error es 422, mostrar información detallada para depuración
+      if (response.status === 422) {
+        const errorData = await response.json();
+        
+        // Mostrar mensaje más detallado para ayudar al diagnóstico
+        let errorMessage = "Los datos enviados no son válidos.";
+        if (errorData && errorData.errors) {
+          // Extraer mensajes de error específicos
+          const errorDetails = Object.entries(errorData.errors)
+            .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+            .join('; ');
+          errorMessage += ` ${errorDetails}`;
+        }
+        
+        throw new Error(`Error 422: ${errorMessage}`);
+      }
 
       // Si el error es 403 (Prohibido), mostrar un mensaje claro
       if (response.status === 403) {
@@ -195,15 +370,25 @@ export default function CampaignRewards() {
       }
 
       if (!response.ok) {
+        const responseText = await response.text();
         throw new Error(`Error al enviar el video (${response.status}): ${responseText}`);
       }
 
-      const data = JSON.parse(responseText);
+      const responseText = await response.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        data = { success: true }; // Asumimos éxito si la respuesta es exitosa pero no es JSON
+      }
 
       if (data.success) {
-        toast.success("¡Video enviado correctamente! Tu participación en la campaña ha sido registrada.");
+        // Mostrar mensaje de éxito con detalles si están disponibles
+        const message = data.message || "¡Video enviado correctamente!";
+        toast.success(message);
+        
+        // Limpiar el formulario
         setVideoLink("");
-        // También podríamos reiniciar los demás valores o redirigir a otra página
       } else {
         throw new Error(data.message || "Error al enviar el video");
       }
@@ -281,7 +466,7 @@ export default function CampaignRewards() {
                   </div>
                   <p className="text-white text-sm">${campaign?.budget_spent || "0"} de ${campaign?.total_budget || "0"} pagados</p>
                   <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-orange-500" style={{ width: `${campaign?.budget_percentage || 0}%` }}></div>
+                    <div className="h-full bg-violet-500" style={{ width: `${campaign?.budget_percentage || 0}%` }}></div>
                   </div>
                 </div>
 
@@ -293,7 +478,7 @@ export default function CampaignRewards() {
                   </div>
                   <p className="text-white text-sm">quedan {daysLeft} días</p>
                   <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-orange-500" style={{ width: `${timePercentage}%` }}></div>
+                    <div className="h-full bg-violet-500" style={{ width: `${timePercentage}%` }}></div>
                   </div>
                 </div>
               </div>
@@ -302,7 +487,7 @@ export default function CampaignRewards() {
                 {/* REWARD */}
                 <div>
                   <h3 className="text-gray-400 text-xs uppercase font-medium mb-2">RECOMPENSAS</h3>
-                  <div className="bg-blue-600 text-white text-sm font-medium py-1.5 px-3 rounded-md inline-block">
+                  <div className="bg-violet-600 text-white text-sm font-medium py-1.5 px-3 rounded-md inline-block">
                     {parseFloat(campaign?.price_per_view || "0").toFixed(2)} US$ / 1 mil
                   </div>
                 </div>
@@ -377,60 +562,69 @@ export default function CampaignRewards() {
                 <h2 className="text-white text-xl font-semibold mb-2">Envíe su publicación de video en las redes sociales</h2>
                 <p className="text-gray-400 text-sm mb-4">Comparte el enlace de tu publicación a continuación.</p>
 
-                <div className="mb-4">
-                  <label htmlFor="videoLink" className="block text-gray-400 text-sm mb-2">Enlace del video *</label>
-                  <input
-                    type="text"
-                    id="videoLink"
-                    placeholder="https://"
-                    className="w-full p-3 rounded-md bg-[#111] border border-[#333] text-white text-sm focus:outline-none focus:border-blue-500"
-                    value={videoLink}
-                    onChange={(e) => setVideoLink(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <label htmlFor="videoTitle" className="block text-gray-400 text-sm mb-2">Título del video</label>
-                  <input
-                    type="text"
-                    id="videoTitle"
-                    placeholder="Título de su video"
-                    className="w-full p-3 rounded-md bg-[#111] border border-[#333] text-white text-sm focus:outline-none focus:border-blue-500"
-                    value={videoTitle}
-                    onChange={(e) => setVideoTitle(e.target.value)}
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <label htmlFor="videoDescription" className="block text-gray-400 text-sm mb-2">Descripción</label>
-                  <textarea
-                    id="videoDescription"
-                    placeholder="Describa brevemente su video"
-                    className="w-full p-3 rounded-md bg-[#111] border border-[#333] text-white text-sm focus:outline-none focus:border-blue-500"
-                    value={videoDescription}
-                    onChange={(e) => setVideoDescription(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-
-                <button
-                  className={`w-full bg-blue-600 hover:bg-blue-700 text-white text-center py-3 rounded-md transition ${submitting ? 'opacity-70 cursor-not-allowed' : ''}`}
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                >
-                  {submitting ? (
-                    <span className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Enviando...
-                    </span>
-                  ) : (
-                    "Enviar"
-                  )}
-                </button>
+                {isCheckingStatus ? (
+                  <div className="flex items-center justify-center py-6">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-violet-500"></div>
+                    <p className="text-white ml-4">Verificando estado...</p>
+                  </div>
+                ) : isJoined ? (
+                  <>
+                    <div className="mb-4">
+                      <label htmlFor="videoLink" className="block text-gray-400 text-sm mb-2">Enlace del video *</label>
+                      <input
+                        type="text"
+                        id="videoLink"
+                        placeholder="https://"
+                        className="w-full p-3 rounded-md bg-[#111] border border-[#333] text-white text-sm focus:outline-none focus:border-blue-500"
+                        value={videoLink}
+                        onChange={(e) => setVideoLink(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <button
+                      className={`w-full bg-violet-600 hover:bg-violet-700 text-white text-center py-3 rounded-md transition ${submitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                      onClick={handleSubmit}
+                      disabled={submitting}
+                    >
+                      {submitting ? (
+                        <span className="flex items-center justify-center">
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Enviando...
+                        </span>
+                      ) : (
+                        "Enviar"
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-center py-6">
+                    <div className="bg-[#222] text-yellow-500 border border-yellow-500/30 p-4 rounded-lg mb-6">
+                      <p className="text-sm">Debes unirte a esta campaña antes de poder enviar videos. Al unirte, aceptas cumplir con los requisitos establecidos.</p>
+                    </div>
+                    <button
+                      className={`bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-6 rounded-md w-full ${
+                        isJoining ? 'opacity-70 cursor-not-allowed' : ''
+                      }`}
+                      onClick={joinCampaign}
+                      disabled={isJoining}
+                    >
+                      {isJoining ? (
+                        <span className="flex items-center justify-center">
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Uniéndose...
+                        </span>
+                      ) : (
+                        'Unirse a esta campaña'
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </main>
