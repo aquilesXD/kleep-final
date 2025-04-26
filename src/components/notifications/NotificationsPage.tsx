@@ -111,6 +111,22 @@ export function NotificationsPage() {
     return () => clearInterval(checkInterval);
   }, [navigate]);
 
+  // Escuchar el evento global 'userLoggedOut' para limpiar el estado
+  useEffect(() => {
+    const handleLogout = () => {
+      setNotifications([]);
+      setGroupedNotifications({});
+      setUnreadCount(0);
+      navigate('/signin');
+    };
+
+    window.addEventListener('userLoggedOut', handleLogout);
+
+    return () => {
+      window.removeEventListener('userLoggedOut', handleLogout);
+    };
+  }, [navigate]);
+
   // Obtener conteo de notificaciones no leídas
   const fetchUnreadCount = useCallback(async () => {
     // No hacer nada si el usuario no está autenticado
@@ -438,6 +454,22 @@ export function NotificationsPage() {
       navigate(`/campaigns/${campaignId}`);
     }
   }, [handleMarkAsRead, navigate]);
+
+  // Verificar si el usuario está autenticado antes de renderizar las notificaciones
+  if (!isUserAuthenticated()) {
+    return (
+      <MainLayout>
+        <div className="flex flex-col w-full h-full min-h-screen bg-[#121212] text-white">
+          <div className="sticky top-0 z-10 bg-[#121212] border-b border-[#1c1c1c] px-4 py-3">
+            <h1 className="text-xl font-bold">Notificaciones</h1>
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-gray-300">Por favor, inicia sesión para ver tus notificaciones.</p>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
 
   // Mostrar estado de carga
   if (loading) {

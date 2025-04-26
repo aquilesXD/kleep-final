@@ -20,6 +20,7 @@ interface RewardCardProps {
     earnings?: string
     status?: string
     isJoined?: boolean
+    banner_image?: string
   }
   showEarnings?: boolean
 }
@@ -53,7 +54,7 @@ export function RewardCard({ reward, showEarnings = false }: RewardCardProps) {
           <div className="flex items-center mb-3">
             <div className="h-10 w-10 rounded-full overflow-hidden mr-3 flex-shrink-0">
               <img
-                src={reward.avatar || "/placeholder.svg"}
+                src={reward.banner_image || reward.avatar || "/placeholder.svg"}
                 alt={`${reward.creator} avatar`}
                 className="h-full w-full object-cover"
               />

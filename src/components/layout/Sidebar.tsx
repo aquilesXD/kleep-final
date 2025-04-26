@@ -145,6 +145,21 @@ const Sidebar = () => {
     };
   }, []);
 
+  // Escuchar el evento global 'userLoggedOut' para limpiar el estado
+  useEffect(() => {
+    const handleLogout = () => {
+      setHasUnreadNotifications(false);
+      setUnreadCount(0);
+      setUserAuthenticated(false);
+    };
+
+    window.addEventListener('userLoggedOut', handleLogout);
+
+    return () => {
+      window.removeEventListener('userLoggedOut', handleLogout);
+    };
+  }, []);
+
   // Cargar las notificaciones no leídas al iniciar y cada cierto tiempo
   useEffect(() => {
     // Solo ejecutar si el usuario está autenticado

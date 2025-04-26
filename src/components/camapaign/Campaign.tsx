@@ -196,7 +196,10 @@ export default function Campaign() {
       <Sidebar />
       <div className="pl-20 lg:pl-24">
         <div className="flex flex-col lg:flex-row">
-          <CampaignSidebar />
+          <CampaignSidebar 
+            isAuthenticated={Boolean(localStorage.getItem("isAuthenticated") && localStorage.getItem("userEmail"))}
+            isJoined={campaignData?.is_joined || false}
+          />
           <main className="flex-1 p-4 lg:p-8">
             
             

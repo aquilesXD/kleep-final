@@ -19,6 +19,8 @@ interface WhopCreatorsModalProps {
     rate: string;
     specialStyle?: boolean;
     image?: string;
+    banner_image?: string;
+    profile_image?: string;
   };
 }
 
@@ -245,16 +247,16 @@ const WhopCreatorsModal = ({ onClose, reward }: WhopCreatorsModalProps) => {
 
           <div className="aspect-video w-full rounded-md overflow-hidden mb-4 relative">
             <img
-              src={imageUrl}
+              src={reward.image || reward.banner_image || 'https://picsum.photos/800/300?random=1'}
               alt={reward.title}
               className="w-full h-full object-cover"
             />
           </div>
 
-          <div className="mb-6">
+            <div className="mb-6">
             <h2 className="text-2xl font-bold mb-2">{reward.title}</h2>
             <p className="text-sm text-gray-400">Creado por <span className="text-white">{reward.creator}</span></p>
-          </div>
+            </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
@@ -274,7 +276,7 @@ const WhopCreatorsModal = ({ onClose, reward }: WhopCreatorsModalProps) => {
             </p>
             <div className="h-2 w-full bg-[#1c1c1c] rounded-full overflow-hidden mb-2">
               <div
-                className="bg-orange-500 h-full"
+                className="bg-violet-500 h-full"
                 style={{ width: `${reward.percentage}%` }}
               />
             </div>

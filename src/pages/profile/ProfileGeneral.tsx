@@ -7,7 +7,9 @@ interface UserProfile {
   name: string;
   username: string;
   age: number | null;
-  profile_picture: string;
+  profile_image: string;
+  biography: string;
+  country: string;
 }
 
 interface ProfileErrors {
@@ -16,6 +18,8 @@ interface ProfileErrors {
   username?: string;
   age?: string;
   profilePicture?: string;
+  biography?: string;
+  country?: string;
 }
 
 // API endpoint constante
@@ -28,11 +32,16 @@ const ProfileGeneral: React.FC = () => {
     name: '',
     username: '',
     age: null,
-    profile_picture: ''
+    profile_image: '',
+    biography: '',
+    country: ''
   });
   
   // Estado para la nueva imagen de perfil
   const [newProfilePicture, setNewProfilePicture] = useState<File | null>(null);
+  
+  // Estado para la previsualización de la imagen
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   
   // Referencia para el input de archivo
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -53,6 +62,7 @@ const ProfileGeneral: React.FC = () => {
       profile.name.length >= 2 &&
       (!profile.username || profile.username.length >= 3) &&
       (profile.age === null || (profile.age >= 0 && profile.age <= 120)) &&
+      (profile.biography.length <= 500) &&
       (!newProfilePicture || (newProfilePicture.size <= 2 * 1024 * 1024 && 
         ['image/jpeg', 'image/png', 'image/gif'].includes(newProfilePicture.type)))
     );
@@ -82,7 +92,9 @@ const ProfileGeneral: React.FC = () => {
           name: userData.name || '',
           username: userData.username || '',
           age: userData.age !== undefined ? userData.age : null,
-          profile_picture: userData.profile_image || '',
+          profile_image: userData.profile_image || '',
+          biography: userData.biography || '',
+          country: userData.country || ''
         });
       } else {
         setError('No se pudieron cargar los datos del perfil.');
@@ -122,6 +134,11 @@ const ProfileGeneral: React.FC = () => {
       newErrors.age = 'La edad debe estar entre 0 y 120 años';
     }
     
+    // Validar biografía
+    if (profile.biography && profile.biography.length > 500) {
+      newErrors.biography = 'La biografía no debe exceder los 500 caracteres';
+    }
+    
     // Validar imagen de perfil
     if (newProfilePicture) {
       if (newProfilePicture.size > 2 * 1024 * 1024) {
@@ -159,7 +176,6 @@ const ProfileGeneral: React.FC = () => {
   const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      setNewProfilePicture(file);
       
       // Verificar el tipo de archivo y tamaño
       const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
@@ -179,28 +195,21 @@ const ProfileGeneral: React.FC = () => {
         return;
       }
       
-      // Convertir la imagen a base64 Data URL
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target && event.target.result) {
-          const dataUrl = event.target.result as string;
-          handleInputChange('profile_picture', dataUrl);
-          setErrors(prev => {
-            const newErrors = { ...prev };
-            delete newErrors.profilePicture;
-            return newErrors;
-          });
-        }
-      };
+      // Guardar el archivo para enviarlo al servidor
+      setNewProfilePicture(file);
       
-      reader.onerror = () => {
-        setErrors(prev => ({
-          ...prev,
-          profilePicture: 'Error al procesar la imagen'
-        }));
-      };
+      // Crear URL para previsualización
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview); // Liberar URL anterior
+      }
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreview(previewUrl);
       
-      reader.readAsDataURL(file);
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.profilePicture;
+        return newErrors;
+      });
     }
   };
   
@@ -226,30 +235,54 @@ const ProfileGeneral: React.FC = () => {
         throw new Error('No se encontró el token de autenticación');
       }
 
-      // Crear objeto para la solicitud
-      const userData = {
-        name: profile.name,
-        username: profile.username,
-        age: profile.age,
-        profile_image: profile.profile_picture
-      };
-
-      const response = await axios.put(API_ENDPOINT, userData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      // Usar FormData para poder enviar archivos
+      const formData = new FormData();
+      formData.append('name', profile.name);
+      formData.append('username', profile.username);
+      
+      if (profile.age !== null) {
+        formData.append('age', profile.age.toString());
+      }
+      
+      formData.append('biography', profile.biography || '');
+      formData.append('country', profile.country || '');
+      
+      // Si hay una nueva imagen, añadirla como archivo
+      if (newProfilePicture) {
+        formData.append('profile_image', newProfilePicture);
+      }
+      
+      // Truco para simular PUT con FormData (que solo funciona bien con POST)
+      const response = await axios.post(
+        `${API_ENDPOINT}?_method=PUT`,
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data',
+            'Accept': 'application/json'
+          }
+        }
+      );
 
       if (response.data.success) {
         setSuccess('¡Perfil actualizado exitosamente!');
         setTimeout(() => setSuccess(''), 3000);
+        
+        // Limpiar estados
         setNewProfilePicture(null);
+        if (imagePreview) {
+          URL.revokeObjectURL(imagePreview);
+          setImagePreview(null);
+        }
+        
+        // Recargar el perfil para ver los cambios
         fetchUserProfile();
       } else {
         setError(response.data.message || 'No se pudo actualizar el perfil.');
       }
     } catch (error: any) {
+      console.error('Error al actualizar el perfil:', error);
       setError(error.response?.data?.message || 'Error al actualizar el perfil.');
     } finally {
       setLoading(false);
@@ -259,19 +292,37 @@ const ProfileGeneral: React.FC = () => {
   // Cargar el perfil al montar el componente
   useEffect(() => {
     fetchUserProfile();
+    
+    // Limpiar recursos al desmontar el componente
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
   }, []);
 
   // Renderizar la imagen de perfil
   const renderProfileImage = () => {
-    if (profile.profile_picture) {
+    if (imagePreview) {
+      // Mostrar previsualización si hay una nueva imagen
       return (
         <img 
-          src={profile.profile_picture}
+          src={imagePreview}
+          alt="Previsualización de foto de perfil" 
+          className="w-full h-full object-cover"
+        />
+      );
+    } else if (profile.profile_image) {
+      // Mostrar imagen actual del perfil
+      return (
+        <img 
+          src={profile.profile_image}
           alt="Foto de perfil" 
           className="w-full h-full object-cover"
         />
       );
     } else {
+      // Mostrar iniciales si no hay imagen
       return (
         <div className="text-3xl text-gray-500">
           {profile.name ? profile.name.charAt(0).toUpperCase() : '?'}
@@ -337,6 +388,20 @@ const ProfileGeneral: React.FC = () => {
             </div>
           </div>
 
+          <div className="mb-6">
+            <label className="block text-sm text-gray-400 mb-1.5">País</label>
+            <div className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white">
+              {profile.country || 'No especificado'}
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm text-gray-400 mb-1.5">Biografía</label>
+            <div className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white min-h-[80px] whitespace-pre-wrap">
+              {profile.biography || 'No especificado'}
+            </div>
+          </div>
+
         </div>
       )}
 
@@ -357,7 +422,7 @@ const ProfileGeneral: React.FC = () => {
           )}
 
           <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-1.5">Correo electrónico <span className="text-red-500">*</span></label>
+            <label className="block text-sm text-gray-400 mb-1.5">Correo electrónico</label>
             <input
               className={`w-full p-2.5 bg-[#101010] border ${errors.email ? 'border-red-500' : 'border-[#1c1c1c]'} rounded-md text-white focus:outline-none focus:border-[#272727]`}
               placeholder="Correo electrónico"
@@ -374,7 +439,7 @@ const ProfileGeneral: React.FC = () => {
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-1.5">Nombre <span className="text-red-500">*</span></label>
+            <label className="block text-sm text-gray-400 mb-1.5">Nombre</label>
             <input
               className={`w-full p-2.5 bg-[#101010] border ${errors.name ? 'border-red-500' : 'border-[#1c1c1c]'} rounded-md text-white focus:outline-none focus:border-[#272727]`}
               placeholder="Nombre completo"
@@ -414,6 +479,35 @@ const ProfileGeneral: React.FC = () => {
             {errors.age && (
               <p className="text-red-500 text-xs mt-1">{errors.age}</p>
             )}
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm text-gray-400 mb-1.5">País</label>
+            <input
+              className={`w-full p-2.5 bg-[#101010] border ${errors.country ? 'border-red-500' : 'border-[#1c1c1c]'} rounded-md text-white focus:outline-none focus:border-[#272727]`}
+              placeholder="País"
+              type="text"
+              value={profile.country}
+              onChange={(e) => handleInputChange('country', e.target.value)}
+            />
+            {errors.country && (
+              <p className="text-red-500 text-xs mt-1">{errors.country}</p>
+            )}
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm text-gray-400 mb-1.5">Biografía</label>
+            <textarea
+              className={`w-full p-2.5 bg-[#101010] border ${errors.biography ? 'border-red-500' : 'border-[#1c1c1c]'} rounded-md text-white focus:outline-none focus:border-[#272727] min-h-[100px]`}
+              placeholder="Escribe algo sobre ti..."
+              value={profile.biography}
+              onChange={(e) => handleInputChange('biography', e.target.value)}
+              maxLength={500}
+            />
+            {errors.biography && (
+              <p className="text-red-500 text-xs mt-1">{errors.biography}</p>
+            )}
+            <p className="text-gray-500 text-xs mt-1">{profile.biography.length}/500 caracteres</p>
           </div>
 
           {/* Sección de foto de perfil */}

@@ -69,6 +69,14 @@ export const logout = (): void => {
   localStorage.removeItem('isAuthenticated');
   localStorage.removeItem('userEmail');
   localStorage.removeItem('apiResponse');
+  // Eliminar el token de autenticación de localStorage y sessionStorage
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('token');
+  sessionStorage.removeItem('authToken');
+  sessionStorage.removeItem('token');
+
+  // Disparar un evento global para notificar el cierre de sesión
+  window.dispatchEvent(new Event('userLoggedOut'));
 };
 
 /**

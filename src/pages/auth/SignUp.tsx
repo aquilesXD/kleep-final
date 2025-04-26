@@ -12,7 +12,7 @@ const SignUp: React.FC = () => {
   const [name, setName] = useState<string>('');
   const [username, setUsername] = useState<string>('');
   const [age, setAge] = useState<number | ''>('');
-  const [profilePicture, setProfilePicture] = useState<File | null>(null);
+  const [profileImage, setProfileImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isValidForm, setIsValidForm] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -134,10 +134,10 @@ const SignUp: React.FC = () => {
     setError(null);
   };
 
-  const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      setProfilePicture(file);
+      setProfileImage(file);
       
       // Crear URL para previsualización
       const fileUrl = URL.createObjectURL(file);
@@ -174,8 +174,8 @@ const SignUp: React.FC = () => {
       }
       
       // Solo añadir la imagen si existe
-      if (profilePicture && profilePicture instanceof File && profilePicture.size > 0) {
-        formData.append('profile_picture', profilePicture);
+      if (profileImage && profileImage instanceof File && profileImage.size > 0) {
+        formData.append('profile_image', profileImage);
       }
 
       // Configurar headers
@@ -222,7 +222,7 @@ const SignUp: React.FC = () => {
         username,
         email,
         age,
-        has_profile_picture: !!profilePicture
+        has_profile_image: !!profileImage
       }));
 
       // Notificar éxito
@@ -320,12 +320,12 @@ const SignUp: React.FC = () => {
                 </div>
               )}
               <label className="cursor-pointer bg-[rgba(40,40,40,0.5)] hover:bg-[rgba(60,60,60,0.5)] text-white px-4 py-2 rounded-lg transition-colors">
-                {profilePicture ? 'Cambiar foto' : 'Subir foto'}
+                {profileImage ? 'Cambiar foto' : 'Subir foto'}
                 <input
                   type="file"
                   className="hidden"
                   accept="image/*"
-                  onChange={handleProfilePictureChange}
+                  onChange={handleProfileImageChange}
                   disabled={isLoading}
                 />
               </label>

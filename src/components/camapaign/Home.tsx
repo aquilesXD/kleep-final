@@ -30,6 +30,7 @@ const mapCampaignToReward = (campaign: Campaign) => {
   return {
     id: campaign.id,
     avatar: campaign.profile_image,
+    banner_image: campaign.banner_image,
     creator: campaign.admin_name,
     title: campaign.name,
     paidAmount: campaign.budget_spent,
@@ -51,22 +52,40 @@ export default function Home() {
   const [rewards, setRewards] = useState<any[]>([])
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
+  const [activeSort, setActiveSort] = useState<string | null>(null) // <<< Nuevo estado para el botón activo
+
   // Verificar autenticación al montar el componente
   useEffect(() => {
     const authStatus = localStorage.getItem("isAuthenticated");
     const userEmail = localStorage.getItem("userEmail");
-    setIsAuthenticated(Boolean(authStatus && userEmail));
+    const token = localStorage.getItem("token") || 
+                 localStorage.getItem("authToken") || 
+                 sessionStorage.getItem("token") || 
+                 sessionStorage.getItem("authToken");
+    
+    const isAuth = Boolean(authStatus && (userEmail || token));
+    setIsAuthenticated(isAuth);
+    
+    if (!isAuth) {
+      console.warn("Usuario no autenticado, algunas funciones pueden no estar disponibles");
+    }
   }, []);
 
   useEffect(() => {
     const fetchCampaigns = async () => {
       try {
         setLoading(true);
-
-        // Obtener el token dinámicamente
         const token = getAuthToken();
+        
+        if (!token) {
+          console.error("No authentication token available");
+          setError("No se pudo autenticar. Por favor, inicie sesión nuevamente.");
+          setLoading(false);
+          return;
+        }
 
-        // Intentar obtener las campañas principales
+        console.log("Fetching campaigns with token:", token.substring(0, 5) + "...");
+
         let response = await fetch('https://contabl.net/kleep/api/campaigns', {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -76,6 +95,8 @@ export default function Home() {
         });
 
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Error al cargar las campañas (${response.status}):`, errorText);
           throw new Error(`Error al cargar las campañas (${response.status})`);
         }
 
@@ -85,19 +106,16 @@ export default function Home() {
           throw new Error('Formato de respuesta inválido: no se encontraron campañas');
         }
 
-        // Guardar las campañas obtenidas
         const allCampaigns = data.campaigns.map((campaign: Campaign) => ({
           ...campaign,
-          is_joined: false, // Por defecto, ninguna campaña está unida
+          is_joined: false,
         }));
+
         setCampaigns(allCampaigns);
         setTotalResults(allCampaigns.length);
-
-        // Mapear las campañas al formato de recompensas inicialmente
         const initialMappedRewards = allCampaigns.map(mapCampaignToReward);
         setRewards(initialMappedRewards);
 
-        // Asegurar que las campañas no se marquen como "unidas" para usuarios nuevos
         if (isAuthenticated) {
           try {
             const joinedResponse = await fetch('https://contabl.net/kleep/api/campaigns/joined', {
@@ -108,7 +126,9 @@ export default function Home() {
               },
             });
 
-            if (joinedResponse.ok) {
+            if (!joinedResponse.ok) {
+              console.error(`Error al obtener campañas unidas (${joinedResponse.status})`);
+            } else {
               const joinedData = await joinedResponse.json();
 
               if (joinedData.campaigns && Array.isArray(joinedData.campaigns)) {
@@ -116,22 +136,9 @@ export default function Home() {
                   joinedData.campaigns.map((campaign: { id: number }) => campaign.id)
                 );
 
-                // Actualizar las campañas con la información de "unido"
                 const updatedCampaigns = allCampaigns.map((campaign: Campaign) => ({
                   ...campaign,
                   is_joined: joinedCampaignIds.has(campaign.id),
-                }));
-
-                setCampaigns(updatedCampaigns);
-
-                // Actualizar recompensas con la nueva información
-                const updatedRewards = updatedCampaigns.map(mapCampaignToReward);
-                setRewards(updatedRewards);
-              } else {
-                // Si no hay campañas unidas, asegurarse de que todas estén marcadas como no unidas
-                const updatedCampaigns = allCampaigns.map((campaign: Campaign) => ({
-                  ...campaign,
-                  is_joined: false,
                 }));
 
                 setCampaigns(updatedCampaigns);
@@ -141,17 +148,7 @@ export default function Home() {
           } catch (joinedErr) {
             console.error('Error al obtener campañas unidas:', joinedErr);
           }
-        } else {
-          // Si el usuario no está autenticado, asegurarse de que todas las campañas estén marcadas como no unidas
-          const updatedCampaigns = allCampaigns.map((campaign: Campaign) => ({
-            ...campaign,
-            is_joined: false,
-          }));
-
-          setCampaigns(updatedCampaigns);
-          setRewards(updatedCampaigns.map(mapCampaignToReward));
         }
-
         setError(null);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
@@ -167,6 +164,7 @@ export default function Home() {
   }, [isAuthenticated]);
 
   const handleSortBy = (sortType: string) => {
+    setActiveSort(sortType); // <<< Actualizar el botón activo
     let sortedCampaigns = [...campaigns];
     
     switch(sortType) {
@@ -197,26 +195,39 @@ export default function Home() {
           <p className="text-sm text-gray-500 mb-6">Publica contenidos en las redes sociales y cobra por las visitas que generes!</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div>
-              {/* Buscador eliminado */}
-            </div>
+            <div></div>
 
             <div className="text-right">
+              {/* Botones adaptados */}
               <div className="inline-flex rounded-md shadow-sm gap-2">
                 <button 
                   onClick={() => handleSortBy('most_paid')}
-                  className="bg-[#1c1c1c] hover:bg-violet-600 text-white px-4 py-2 rounded-md">
-                  Mas pagados
+                  className={`
+                    px-4 py-2 rounded-md transition-colors text-white
+                    ${activeSort === 'most_paid' ? 'bg-blue-500' : 'bg-[#1c1c1c] hover:bg-violet-600'}
+                  `}
+                >
+                  Más pagados
                 </button>
+
                 <button 
                   onClick={() => handleSortBy('highest_cpm')}
-                  className="bg-[#1c1c1c] hover:bg-violet-600 text-white px-4 py-2 rounded-md">
+                  className={`
+                    px-4 py-2 rounded-md transition-colors text-white
+                    ${activeSort === 'highest_cpm' ? 'bg-blue-500' : 'bg-[#1c1c1c] hover:bg-violet-600'}
+                  `}
+                >
                   CPM más alto
                 </button>
+
                 <button 
                   onClick={() => handleSortBy('newest')}
-                  className="bg-[#1c1c1c] hover:bg-violet-600 text-white px-4 py-2 rounded-md">
-                  Mas Recientes
+                  className={`
+                    px-4 py-2 rounded-md transition-colors text-white
+                    ${activeSort === 'newest' ? 'bg-blue-500' : 'bg-[#1c1c1c] hover:bg-violet-600'}
+                  `}
+                >
+                  Más recientes
                 </button>
               </div>
             </div>
@@ -280,9 +291,9 @@ export default function Home() {
               </button>
             </nav>
           </div>
+
         </div>
       </div>
     </div>
   )
 }
-

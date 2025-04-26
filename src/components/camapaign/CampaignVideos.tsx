@@ -57,6 +57,23 @@ export default function CampaignVideos() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthError, setIsAuthError] = useState(false);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+
+  // Detectar dispositivo móvil
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    // Comprobar al inicio
+    checkMobile();
+    
+    // Comprobar al cambiar el tamaño de la ventana
+    window.addEventListener('resize', checkMobile);
+    
+    // Limpiar event listener
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Obtener los videos y las cuentas no verificadas
   const fetchVideos = useCallback(async () => {
@@ -165,116 +182,215 @@ export default function CampaignVideos() {
   // Mostrar mensaje de error
   if (error) {
     return (
-      <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center">
-        <p className="text-red-500 text-xl">{error}</p>
+      <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center p-4">
+        <p className="text-red-500 text-xl text-center">{error}</p>
+        {isAuthError && (
+          <button 
+            onClick={() => navigate('/signin')} 
+            className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md">
+            Iniciar sesión
+          </button>
+        )}
       </div>
     );
   }
 
+  // Renderizado para vista móvil de la tabla
+  const renderMobileVideoCards = () => {
+    if (videos.length === 0) {
+      return (
+        <div className="p-4 bg-[#181818] rounded-lg text-center">
+          <svg className="w-12 h-12 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 4v16M17 4v16M3 8h18M3 16h18"></path>
+          </svg>
+          <p className="text-lg font-medium text-white mb-2">No has enviado videos aún</p>
+        </div>
+      );
+    }
+
+    return videos.map((video) => {
+      const hasSufficientViews = (video.views || 0) >= 1000;
+
+      // Determinar el texto del estado
+      let statusText = "";
+      let statusClass = "";
+      let statusIcon = null;
+      
+      if (video.status === 'pending') {
+        statusText = "En proceso";
+        statusClass = "bg-yellow-900/30 text-yellow-500 border border-yellow-700";
+        statusIcon = <Clock size={12} className="mr-1" />;
+      } else if (video.status === 'approved') {
+        statusText = "Aprobado";
+        statusClass = "bg-green-900/30 text-green-500 border border-green-700";
+        statusIcon = <Check size={12} className="mr-1" />;
+      } else if (video.status === 'rejected') {
+        statusText = "Rechazado";
+        statusClass = "bg-red-900/30 text-red-500 border border-red-700";
+        statusIcon = <X size={12} className="mr-1" />;
+      }
+
+      return (
+        <div key={video.id} className="mb-4 bg-[#181818] p-4 rounded-lg border border-[#2a2a2a]">
+          <div className="flex justify-between items-start mb-3">
+            <p className="text-white font-medium">{formatUsername(video.account_username)}</p>
+            <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${statusClass}`}>
+              {statusIcon}
+              <span>{statusText}</span>
+            </div>
+          </div>
+          
+          <div className="mb-3">
+            <a
+              href={video.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-violet-500 flex items-center"
+            >
+              {video.title !== "Ver video" ? video.title : "Ver video"} <ExternalLink size={14} className="ml-1" />
+            </a>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-xs text-gray-400">Vistas</p>
+              <p className={`font-medium ${!hasSufficientViews ? 'text-yellow-500' : 'text-white'}`}>
+                {video.views?.toLocaleString() || '0'}
+                {!hasSufficientViews && (
+                  <span className="block text-xs">Mínimo 1000 vistas</span>
+                )}
+              </p>
+            </div>
+            
+            <div>
+              <p className="text-xs text-gray-400">Pago</p>
+              <p className="text-white font-medium">
+                ${video.payment_amount?.toFixed(2) || '0.00'}
+                {!hasSufficientViews && (
+                  <span className="block text-yellow-500 text-xs">
+                    Pendiente de vistas
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    });
+  };
+
   return (
     <div className="min-h-screen bg-[#121212]">
       <Sidebar />
-      <div className="pl-20 lg:pl-24">
+      <div className="pl-16 sm:pl-20 lg:pl-24">
         <div className="flex flex-col lg:flex-row">
           <CampaignSidebar activeItem="videos" />
-          <div className="flex-1 p-4 lg:p-6 max-w-6xl mx-auto">
-            <h1 className="text-2xl font-bold text-white mb-6">MIS VIDEOS</h1>
+          <div className="flex-1 p-3 sm:p-4 lg:p-6 max-w-6xl mx-auto">
+            <h1 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">MIS VIDEOS</h1>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left text-white border border-[#222]">
-                <thead className="text-xs uppercase bg-[#111] text-gray-400">
-                  <tr>
-                    <th className="px-4 py-3">CUENTA</th>
-                    <th className="px-4 py-3">Video</th>
-                    <th className="px-4 py-3 text-right">Vistas</th>
-                    <th className="px-4 py-3 text-right">Total a pagar</th>
-                    <th className="px-4 py-3">Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {videos.length === 0 ? (
+            {isMobile ? (
+              // Vista móvil: Tarjetas en lugar de tabla
+              <div className="space-y-2">
+                {renderMobileVideoCards()}
+              </div>
+            ) : (
+              // Vista desktop: Tabla
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-white border border-[#222]">
+                  <thead className="text-xs uppercase bg-[#111] text-gray-400">
                     <tr>
-                      <td colSpan={5} className="text-center py-8 text-gray-400">
-                        <div className="flex flex-col items-center justify-center">
-                          <svg className="w-12 h-12 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 4v16M17 4v16M3 8h18M3 16h18"></path>
-                          </svg>
-                          <p className="text-lg font-medium text-white mb-2">No has enviado videos aún</p>
-                          
-                        </div>
-                      </td>
+                      <th className="px-4 py-3">CUENTA</th>
+                      <th className="px-4 py-3">Video</th>
+                      <th className="px-4 py-3 text-right">Vistas</th>
+                      <th className="px-4 py-3 text-right">Total a pagar</th>
+                      <th className="px-4 py-3">Estado</th>
                     </tr>
-                  ) : (
-                    videos.map((video) => {
-                      const hasSufficientViews = (video.views || 0) >= 1000;
+                  </thead>
+                  <tbody>
+                    {videos.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="text-center py-8 text-gray-400">
+                          <div className="flex flex-col items-center justify-center">
+                            <svg className="w-12 h-12 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 4v16M17 4v16M3 8h18M3 16h18"></path>
+                            </svg>
+                            <p className="text-lg font-medium text-white mb-2">No has enviado videos aún</p>
+                            
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      videos.map((video) => {
+                        const hasSufficientViews = (video.views || 0) >= 1000;
 
-                      // Determinar el texto del estado
-                      let statusText = "";
-                      let statusClass = "";
-                      let statusIcon = null;
-                      
-                      if (video.status === 'pending') {
-                        statusText = "En proceso";
-                        statusClass = "bg-yellow-900/30 text-yellow-500 border border-yellow-700";
-                        statusIcon = <Clock size={12} className="mr-1" />;
-                      } else if (video.status === 'approved') {
-                        statusText = "Aprobado";
-                        statusClass = "bg-green-900/30 text-green-500 border border-green-700";
-                        statusIcon = <Check size={12} className="mr-1" />;
-                      } else if (video.status === 'rejected') {
-                        statusText = "Rechazado";
-                        statusClass = "bg-red-900/30 text-red-500 border border-red-700";
-                        statusIcon = <X size={12} className="mr-1" />;
-                      }
+                        // Determinar el texto del estado
+                        let statusText = "";
+                        let statusClass = "";
+                        let statusIcon = null;
+                        
+                        if (video.status === 'pending') {
+                          statusText = "En proceso";
+                          statusClass = "bg-yellow-900/30 text-yellow-500 border border-yellow-700";
+                          statusIcon = <Clock size={12} className="mr-1" />;
+                        } else if (video.status === 'approved') {
+                          statusText = "Aprobado";
+                          statusClass = "bg-green-900/30 text-green-500 border border-green-700";
+                          statusIcon = <Check size={12} className="mr-1" />;
+                        } else if (video.status === 'rejected') {
+                          statusText = "Rechazado";
+                          statusClass = "bg-red-900/30 text-red-500 border border-red-700";
+                          statusIcon = <X size={12} className="mr-1" />;
+                        }
 
-                      return (
-                        <tr key={video.id} className="border-t border-[#222]">
-                          <td className="px-4 py-3">{formatUsername(video.account_username)}</td>
-                          <td className="px-4 py-3">
-                            <a
-                              href={video.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-violet-500 flex items-center"
-                            >
-                              {video.title !== "Ver video" ? video.title : "Ver video"} <ExternalLink size={14} className="ml-1" />
-                            </a>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <span className={!hasSufficientViews ? 'text-yellow-500' : ''}>
-                              {video.views?.toLocaleString() || '0'}
-                              {!hasSufficientViews && (
-                                <span className="block text-xs">Mínimo 1000 vistas</span>
-                              )}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <p className="text-white font-medium">
-                              ${video.payment_amount?.toFixed(2) || '0.00'}
-                              {!hasSufficientViews && (
-                                <span className="block text-yellow-500 text-xs">
-                                  * Pendiente de vistas
-                                </span>
-                              )}
-                            </p>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${statusClass}`}>
-                              {statusIcon}
-                              <span>{statusText}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+                        return (
+                          <tr key={video.id} className="border-t border-[#222]">
+                            <td className="px-4 py-3">{formatUsername(video.account_username)}</td>
+                            <td className="px-4 py-3">
+                              <a
+                                href={video.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-violet-500 flex items-center"
+                              >
+                                {video.title !== "Ver video" ? video.title : "Ver video"} <ExternalLink size={14} className="ml-1" />
+                              </a>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <span className={!hasSufficientViews ? 'text-yellow-500' : ''}>
+                                {video.views?.toLocaleString() || '0'}
+                                {!hasSufficientViews && (
+                                  <span className="block text-xs">Mínimo 1000 vistas</span>
+                                )}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <p className="text-white font-medium">
+                                ${video.payment_amount?.toFixed(2) || '0.00'}
+                                {!hasSufficientViews && (
+                                  <span className="block text-yellow-500 text-xs">
+                                    * Pendiente de vistas
+                                  </span>
+                                )}
+                              </p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${statusClass}`}>
+                                {statusIcon}
+                                <span>{statusText}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-            {/* Sección de cuentas no verificadas */}
-            <div className="mt-10 bg-[#111] border border-[#222] rounded-lg p-6">
-              <h3 className="text-xl font-semibold text-white mb-2">
+            {/* Sección de cuentas no verificadas - Adaptada para móvil */}
+            <div className="mt-8 bg-[#111] border border-[#222] rounded-lg p-4 sm:p-6">
+              <h3 className="text-lg sm:text-xl font-semibold text-white mb-2">
                 Verifica tus cuentas de TikTok
               </h3>
               <p className="text-gray-400 text-sm mb-4">
@@ -291,7 +407,7 @@ export default function CampaignVideos() {
                     </p>
                   </div>
                   
-                  <div className="bg-[#0c0c0c]/50 border border-[#1c1c1c] rounded p-4 mb-6">
+                  <div className="bg-[#0c0c0c]/50 border border-[#1c1c1c] rounded p-3 sm:p-4 mb-6">
                     <h4 className="text-white font-medium mb-3">Cuentas pendientes de verificación:</h4>
                     <div className="space-y-3">
                       {unverifiedAccounts.map((acc) => (
@@ -323,7 +439,7 @@ export default function CampaignVideos() {
 
               <button
                 onClick={() => navigate('/profile-cuentas')}
-                className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium py-2 px-4 rounded transition-colors"
+                className="w-full sm:w-auto bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium py-2 px-4 rounded transition-colors"
               >
                 Verificar Cuentas de TikTok
               </button>
