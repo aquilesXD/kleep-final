@@ -275,7 +275,6 @@ export function NotificationsPage() {
         }
 
         const data: ApiResponse = await response.json();
-        console.log('Notificaciones recibidas:', data.notifications);
         
         // Añadir la categoría de fecha a cada notificación
         const notificationsWithDate = data.notifications.map(notification => ({
@@ -546,7 +545,7 @@ export function NotificationsPage() {
                >
               {showReadFeedback ? (
                 <>
-                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full text-white"></div>
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
                   <span>Procesando...</span>
                 </>
               ) : (

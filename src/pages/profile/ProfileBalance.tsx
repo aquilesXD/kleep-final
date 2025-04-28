@@ -740,7 +740,6 @@ const ProfileBalance = () => {
                         Tienes {unverifiedAccounts.length} {unverifiedAccounts.length === 1 ? 'cuenta pendiente' : 'cuentas pendientes'} de verificación.
                       </p>
                     </div>
-                    
                     <div className="bg-[#0c0c0c]/50 border border-[#1c1c1c] rounded p-3 mb-3">
                       <ul className="text-sm">
                         {unverifiedAccounts.slice(0, 3).map((account, index) => (

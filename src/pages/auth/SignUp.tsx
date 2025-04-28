@@ -22,16 +22,8 @@ const SignUp: React.FC = () => {
   const navigate = useNavigate();
   const particlesContainer = useRef<HTMLDivElement>(null);
 
-  // Verificar si el usuario ya está autenticado
+  // Cargar el script de partículas
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    
-    // Si el usuario ya completó todo el proceso de registro, redirigir
-    if (isAuthenticated === 'true') {
-      navigate('/campaign-home');
-    }
-    
-    // Cargar el script de partículas
     if (typeof window !== "undefined" && !(window as any).particlesJS) {
       const script = document.createElement('script');
       script.src = 'https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js';
@@ -43,7 +35,7 @@ const SignUp: React.FC = () => {
     } else {
       setParticlesScriptLoaded(true);
     }
-  }, [navigate]);
+  }, []);
 
   // Inicializar las partículas cuando el script esté cargado
   useEffect(() => {
@@ -105,7 +97,7 @@ const SignUp: React.FC = () => {
       username.trim().length > 0 &&
       (typeof age === 'number' || age.toString().trim() !== '') &&
       country.trim().length > 0 &&
-      phone.trim().length > 0
+      phone.replace(/\D/g, '').length > 0
     );
   }, [email, name, username, age, country, phone]);
 
@@ -142,7 +134,9 @@ const SignUp: React.FC = () => {
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPhone(e.target.value);
+    // Solo permitir números y eliminar cualquier otro carácter
+    const value = e.target.value.replace(/\D/g, '');
+    setPhone(value);
     setError(null);
   };
 
@@ -159,9 +153,6 @@ const SignUp: React.FC = () => {
     setError(null);
 
     try {
-      // Obtener token si existe
-      const token = localStorage.getItem('token');
-      
       // Preparar datos del formulario
       const formData = new FormData();
       formData.append('email', email.trim());
@@ -177,16 +168,9 @@ const SignUp: React.FC = () => {
       formData.append('country', country.trim());
       formData.append('phone', phone.trim());
 
-      // Configurar headers
-      const headers = new Headers();
-      if (token) {
-        headers.append('Authorization', `Bearer ${token}`);
-      }
-
       // Enviar solicitud
       const response = await fetch(API_USER_ENDPOINT, {
         method: 'POST',
-        headers: headers,
         body: formData,
       });
 
@@ -208,29 +192,16 @@ const SignUp: React.FC = () => {
       // Manejo de respuesta exitosa
       if (responseData.token) {
         localStorage.setItem('token', responseData.token);
+        localStorage.setItem('userEmail', email);
+        localStorage.setItem('userId', responseData.id || responseData.user_id || '');
+        localStorage.setItem('isAuthenticated', 'true');
       }
-      
-      // Guardar info del usuario
-      localStorage.setItem('userEmail', email);
-      localStorage.setItem('userId', responseData.id || responseData.user_id || '');
-      localStorage.setItem('isAuthenticated', 'true');
-      
-      // Guardar datos básicos del usuario
-      localStorage.setItem('userInfo', JSON.stringify({
-        name,
-        username,
-        email,
-        age,
-        country,
-        phone,
-        has_profile_image: false
-      }));
 
       // Notificar éxito
       toast.success('Usuario creado correctamente');
       
-      // Redirigir
-      navigate('/campaign-home');
+      // Redirigir al login
+      navigate('/signin');
     } catch (error: any) {
       console.error('Error:', error);
       setError(error.message || 'Error al crear el usuario');
@@ -254,6 +225,9 @@ const SignUp: React.FC = () => {
           <h2 className="text-white mt-4 text-xl sm:text-2xl font-bold">
             Crear cuenta
           </h2>
+          <p className="text-gray-400 mt-2 text-sm">
+            Únete a nuestra comunidad y comienza a ganar dinero con tus videos
+          </p>
         </div>
 
         <form className="mt-6" onSubmit={handleSubmit}>
@@ -329,11 +303,26 @@ const SignUp: React.FC = () => {
             <input
               className={getInputClassName()}
               id="phone"
-              placeholder="Teléfono"
-              type="tel"
+              placeholder="Teléfono (solo números)"
+              type="number"
               value={phone}
               onChange={handlePhoneChange}
+              onInput={(e) => {
+                // Forzar que solo se puedan ingresar números
+                const input = e.target as HTMLInputElement;
+                input.value = input.value.replace(/\D/g, '');
+              }}
+              onPaste={(e) => {
+                // Prevenir pegar texto no numérico
+                const pastedText = e.clipboardData.getData('text');
+                if (!/^\d+$/.test(pastedText)) {
+                  e.preventDefault();
+                }
+              }}
               disabled={isLoading}
+              pattern="[0-9]*"
+              inputMode="numeric"
+              maxLength={15}
               required
             />
           </div>
@@ -345,7 +334,7 @@ const SignUp: React.FC = () => {
             type="submit"
             disabled={!isValidForm || isLoading}
           >
-            {isLoading ? 'Cargando...' : 'Continuar'}
+            {isLoading ? 'Creando cuenta...' : 'Registrarse'}
           </button>
           
           <div className="mt-4 text-center">

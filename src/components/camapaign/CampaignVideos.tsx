@@ -163,10 +163,10 @@ export default function CampaignVideos() {
   // Función para formatear el nombre de usuario
   const formatUsername = (username: string | undefined | null): string => {
     // Si el username es undefined o null, devolver un valor por defecto
-    if (!username) return "@desconocido";
+    if (!username) return "desconocido";
 
-    // Si ya tiene @ al principio, devolverlo tal cual
-    return username.startsWith('@') ? username : `@${username}`;
+    // Si tiene @ al principio, quitarlo
+    return username.startsWith('@') ? username.substring(1) : username;
   };
 
   // Mostrar estado de carga
@@ -400,26 +400,20 @@ export default function CampaignVideos() {
               
               {unverifiedAccounts.length > 0 ? (
                 <>
-                  <div className="flex items-start mb-4">
-                    <AlertTriangle size={18} className="text-yellow-500 mr-2 mt-0.5" />
-                    <p className="text-yellow-500 text-sm">
-                      Este paso es obligatorio para recibir pagos.
-                    </p>
-                  </div>
-                  
-                  <div className="bg-[#0c0c0c]/50 border border-[#1c1c1c] rounded p-3 sm:p-4 mb-6">
-                    <h4 className="text-white font-medium mb-3">Cuentas pendientes de verificación:</h4>
+                  <div className="">
+                  <div className="flex items-center mb-3">
+                      <AlertTriangle className="text-yellow-500 mr-2" size={18} />
+                      <p className="text-yellow-500 text-sm">
+                        Tienes {unverifiedAccounts.length} {unverifiedAccounts.length === 1 ? 'cuenta pendiente' : 'cuentas pendientes'} de verificación.
+                      </p>
+                    </div>
                     <div className="space-y-3">
                       {unverifiedAccounts.map((acc) => (
                         <div key={acc.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-[#0c0c0c] p-3 border border-[#222] rounded-md">
-                          <div className="mb-2 sm:mb-0">
-                            <p className="text-white font-medium">{formatUsername(acc.username)}</p>
-                            <p className="text-xs text-gray-400">Registrada: {acc.created_at ? new Date(acc.created_at).toLocaleDateString() : 'Fecha desconocida'}</p>
-                          </div>
-                          <div className="flex flex-col items-start sm:items-end">
-                            <p className="text-gray-400 text-xs">Código de verificación:</p>
-                            <p className="text-violet-400 font-mono font-bold">{acc.verification_code}</p>
-                          </div>
+                         <button className="text-white font-medium hover:text-violet-400 transition-colors flex items-center gap-2">
+                           <Clock size={16} className="text-yellow-400" />
+                           {formatUsername(acc.username)}
+                         </button>
                         </div>
                       ))}
                     </div>

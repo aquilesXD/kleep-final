@@ -156,11 +156,9 @@ const ProfileGeneral: React.FC = () => {
       }
     }
     
-    // Validar teléfono
-    if (!profile.phone.trim()) {
-      newErrors.phone = 'El teléfono es obligatorio';
-    } else if (!/^\+?[0-9\s-]{7,20}$/.test(profile.phone.trim())) {
-      newErrors.phone = 'Teléfono inválido';
+    // Validar teléfono - Hacemos la validación más flexible
+    if (profile.phone.trim() && !/^[+]?[\d\s-]{7,20}$/.test(profile.phone.trim())) {
+      newErrors.phone = 'Formato de teléfono inválido';
     }
     
     setErrors(newErrors);
@@ -217,6 +215,7 @@ const ProfileGeneral: React.FC = () => {
       const previewUrl = URL.createObjectURL(file);
       setImagePreview(previewUrl);
       
+      // Limpiar errores si los hubiera
       setErrors(prev => {
         const newErrors = { ...prev };
         delete newErrors.profilePicture;
@@ -247,40 +246,47 @@ const ProfileGeneral: React.FC = () => {
         throw new Error('No se encontró el token de autenticación');
       }
 
-      // Usar FormData para poder enviar archivos
+      // Crear FormData para enviar los datos
       const formData = new FormData();
+      
+      // Agregar campos básicos
       formData.append('name', profile.name);
       formData.append('username', profile.username);
-      
+      formData.append('biography', profile.biography);
+      formData.append('country', profile.country);
       if (profile.age !== null) {
         formData.append('age', profile.age.toString());
       }
-      
-      formData.append('biography', profile.biography || '');
-      formData.append('country', profile.country || '');
-      formData.append('phone', profile.phone || '');
-      
-      // Si hay una nueva imagen, añadirla como archivo
+      if (profile.phone) {
+        formData.append('phone', profile.phone);
+      }
+
+      // Agregar la imagen si hay una nueva
       if (newProfilePicture) {
         formData.append('profile_image', newProfilePicture);
       }
-      
-      // Truco para simular PUT con FormData (que solo funciona bien con POST)
+
       const response = await axios.post(
         `${API_ENDPOINT}?_method=PUT`,
         formData,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data',
-            'Accept': 'application/json'
+            'Content-Type': 'multipart/form-data'
           }
         }
       );
 
       if (response.data.success) {
         setSuccess('¡Perfil actualizado exitosamente!');
-        setTimeout(() => setSuccess(''), 3000);
+        
+        // Actualizar el estado con la nueva imagen si se envió una
+        if (newProfilePicture) {
+          setProfile(prev => ({
+            ...prev,
+            profile_image: response.data.user.profile_image
+          }));
+        }
         
         // Limpiar estados
         setNewProfilePicture(null);
@@ -288,15 +294,12 @@ const ProfileGeneral: React.FC = () => {
           URL.revokeObjectURL(imagePreview);
           setImagePreview(null);
         }
-        
-        // Recargar el perfil para ver los cambios
-        fetchUserProfile();
       } else {
-        setError(response.data.message || 'No se pudo actualizar el perfil.');
+        setError(response.data.message || 'No se pudo actualizar el perfil');
       }
     } catch (error: any) {
       console.error('Error al actualizar el perfil:', error);
-      setError(error.response?.data?.message || 'Error al actualizar el perfil.');
+      setError(error.response?.data?.message || 'Error al actualizar el perfil');
     } finally {
       setLoading(false);
     }
@@ -543,15 +546,15 @@ const ProfileGeneral: React.FC = () => {
             <label className="block text-sm text-gray-400 mb-1.5">Teléfono</label>
             <input
               className={`w-full p-2.5 bg-[#101010] border ${errors.phone ? 'border-red-500' : 'border-[#1c1c1c]'} rounded-md text-white focus:outline-none focus:border-[#272727]`}
-              placeholder="Teléfono"
-              type="tel"
+              placeholder="Número de teléfono"
+              type="number"
               value={profile.phone}
               onChange={(e) => handleInputChange('phone', e.target.value)}
-              required
             />
             {errors.phone && (
               <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
             )}
+            <p className="text-gray-500 text-xs mt-1">Formato: +123456789 o 123456789</p>
           </div>
 
           <div className="mb-6">

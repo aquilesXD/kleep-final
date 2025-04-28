@@ -53,7 +53,8 @@ export default function Home() {
   const [rewards, setRewards] = useState<any[]>([])
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  const [activeSort, setActiveSort] = useState<string | null>(null)
+  const [activeSort, setActiveSort] = useState<string | null>('highest_cpm')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
 
   // Verificar autenticación al montar el componente
   useEffect(() => {
@@ -77,27 +78,27 @@ export default function Home() {
         // Endpoint para obtener campañas públicas o autenticadas
         const endpoint = 'https://contabl.net/kleep/api/campaigns';
         
-        // Si hay token, incluir en la petición, sino hacer petición sin autenticación
+        // Configurar headers base
         const headers: HeadersInit = {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         };
         
-        if (token) {
+        let response;
+        
+        // Solo intentar petición autenticada si hay token y el usuario está autenticado
+        if (token && isAuthenticated) {
           headers['Authorization'] = `Bearer ${token}`;
-          console.log("Fetching campaigns with token:", token.substring(0, 5) + "...");
-        } else {
-          console.log("Fetching public campaigns without authentication");
-        }
-
-        let response = await fetch(endpoint, { headers });
-
-        // Si el endpoint autenticado falla, intentar obtener campañas públicas
-        if (!response.ok && token) {
-          console.warn(`Error with authenticated request (${response.status}), trying public endpoint`);
+          response = await fetch(endpoint, { headers });
           
-          // Eliminar el encabezado de autorización para obtener campañas públicas
-          delete headers['Authorization'];
+          // Si falla con autenticación, intentar sin ella
+          if (!response.ok) {
+            console.warn(`Error with authenticated request (${response.status}), trying public endpoint`);
+            delete headers['Authorization'];
+            response = await fetch(endpoint, { headers });
+          }
+        } else {
+          // Si no hay token o no está autenticado, hacer petición pública directamente
           response = await fetch(endpoint, { headers });
         }
 
@@ -123,7 +124,7 @@ export default function Home() {
         const initialMappedRewards = allCampaigns.map(mapCampaignToReward);
         setRewards(initialMappedRewards);
 
-        // Solo obtener campañas unidas si el usuario está autenticado
+        // Solo obtener campañas unidas si el usuario está autenticado y tiene token
         if (isAuthenticated && token) {
           try {
             const joinedResponse = await fetch('https://contabl.net/kleep/api/campaigns/joined', {
@@ -171,19 +172,46 @@ export default function Home() {
     fetchCampaigns();
   }, [isAuthenticated]);
 
+  // Aplicar el ordenamiento inicial cuando se cargan las campañas
+  useEffect(() => {
+    if (campaigns.length > 0) {
+      handleSortBy('highest_cpm');
+    }
+  }, [campaigns]);
+
   const handleSortBy = (sortType: string) => {
-    setActiveSort(sortType);
+    // Si se hace clic en el mismo tipo de ordenamiento, cambia la dirección
+    if (activeSort === sortType) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setActiveSort(sortType)
+      setSortDirection('desc') // Por defecto, orden descendente
+    }
+
     let sortedCampaigns = [...campaigns];
     
     switch(sortType) {
       case 'most_paid':
-        sortedCampaigns.sort((a, b) => parseFloat(b.budget_spent) - parseFloat(a.budget_spent));
+        sortedCampaigns.sort((a, b) => {
+          const diff = parseFloat(b.budget_spent) - parseFloat(a.budget_spent)
+          return sortDirection === 'desc' ? diff : -diff
+        });
         break;
       case 'highest_cpm':
-        sortedCampaigns.sort((a, b) => parseFloat(b.price_per_view) - parseFloat(a.price_per_view));
+        // Filtrar solo las campañas con CPM más alto
+        sortedCampaigns = sortedCampaigns.filter(campaign => {
+          const cpm = parseFloat(campaign.price_per_view);
+          return cpm > 0; // Solo mostrar campañas con CPM positivo
+        }).sort((a, b) => {
+          const diff = parseFloat(b.price_per_view) - parseFloat(a.price_per_view)
+          return sortDirection === 'desc' ? diff : -diff
+        });
         break;
       case 'newest':
-        sortedCampaigns.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        sortedCampaigns.sort((a, b) => {
+          const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          return sortDirection === 'desc' ? diff : -diff
+        });
         break;
       default:
         break;
@@ -191,6 +219,7 @@ export default function Home() {
     
     const mappedRewards = sortedCampaigns.map(mapCampaignToReward);
     setRewards(mappedRewards);
+    setTotalResults(mappedRewards.length); // Actualizar el total de resultados
   };
 
   return (
@@ -211,31 +240,45 @@ export default function Home() {
                 <button 
                   onClick={() => handleSortBy('most_paid')}
                   className={`
-                    px-4 py-2 rounded-md transition-colors text-white
+                    px-4 py-2 rounded-md transition-colors text-white flex items-center gap-1
                     ${activeSort === 'most_paid' ? 'bg-blue-500' : 'bg-[#1c1c1c] hover:bg-violet-600'}
                   `}
                 >
                   Más pagados
+                  {activeSort === 'most_paid' && (
+                    <span className="text-sm">
+                      {sortDirection === 'desc' ? '↓' : '↑'}
+                    </span>
+                  )}
                 </button>
 
                 <button 
                   onClick={() => handleSortBy('highest_cpm')}
                   className={`
-                    px-4 py-2 rounded-md transition-colors text-white
+                    px-4 py-2 rounded-md transition-colors text-white flex items-center gap-1
                     ${activeSort === 'highest_cpm' ? 'bg-blue-500' : 'bg-[#1c1c1c] hover:bg-violet-600'}
                   `}
                 >
                   CPM
+                  {activeSort === 'highest_cpm' && (
+                    <span className="text-sm">
+                      {sortDirection === 'desc' ? '↓' : '↑'}
+                    </span>
+                  )}
                 </button>
 
                 <button 
                   onClick={() => handleSortBy('newest')}
-                  className={`
-                    px-4 py-2 rounded-md transition-colors text-white
+                  className={`                    px-4 py-2 rounded-md transition-colors text-white flex items-center gap-1
                     ${activeSort === 'newest' ? 'bg-blue-500' : 'bg-[#1c1c1c] hover:bg-violet-600'}
                   `}
                 >
                   Más recientes
+                  {activeSort === 'newest' && (
+                    <span className="text-sm">
+                      {sortDirection === 'desc' ? '↓' : '↑'}
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -305,3 +348,4 @@ export default function Home() {
     </div>
   )
 }
+

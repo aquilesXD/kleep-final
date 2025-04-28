@@ -71,7 +71,6 @@ interface CampaignResponse {
 
 export default function Campaign() {
     const { campaignId = "1" } = useParams<{ campaignId: string }>();
-   console.log("Componente Campaign cargando. campaignId recibido:", campaignId);
   
     const [campaignData, setCampaignData] = useState<CampaignResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -211,14 +210,14 @@ export default function Campaign() {
                   <div className="relative w-full max-h-[300px] overflow-hidden rounded-xl">
                     <img
                       src={campaignData.campaign.banner_image}
-                      alt={`${campaignData.campaign.name} banner`}
+                      alt=""
                       className="w-full object-cover rounded-xl"
                     />
                   </div>
 
                   <div className="mt-8 flex items-center justify-center">
                     <img
-                      src={campaignData.campaign.profile_image}
+                      src={campaignData.campaign.banner_image}
                       alt={`${campaignData.campaign.name} logo`}
                       width={24}
                       height={24}

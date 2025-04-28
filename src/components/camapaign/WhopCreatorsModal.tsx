@@ -127,7 +127,9 @@ const WhopCreatorsModal = ({ onClose, reward }: WhopCreatorsModalProps) => {
     const targetPath = `/campaign/${reward.id}`;
     console.log("Intentando navegar a:", targetPath);
     // Navega a la ruta correcta usando el ID de la recompensa
-    navigate(`/campaign/${reward.id}`);
+    if (targetPath) {
+      navigate(targetPath);
+    }
   };
   
   // *** MODIFICACIÓN AQUÍ ***
@@ -137,7 +139,9 @@ const WhopCreatorsModal = ({ onClose, reward }: WhopCreatorsModalProps) => {
     const targetPath = `/campaign/${reward.id}`;
     console.log("Intentando navegar a:", targetPath);
     // Navega a la ruta correcta usando el ID de la recompensa
-    navigate(`/campaign/${reward.id}`);
+    if (targetPath) {
+      navigate(targetPath);
+    }
   };
 
   // Function to handle 401 unauthorized errors

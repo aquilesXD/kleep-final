@@ -124,7 +124,7 @@ export function CampaignSidebar({ activeItem = "overview" }: ProfileSidebarProps
               to={`/campaigns/${campaignId}/start`}
               className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base text-white ${activeItem === "start" ? "bg-[#1c1c1c]" : "hover:bg-[#1c1c1c]"}`}
             >
-              <div className="w-[30px] h-[30px] bg-green-600 rounded flex items-center justify-center mr-3">
+              <div className="w-[30px] h-[30px] bg-blue-600 rounded flex items-center justify-center mr-3">
                 <SquarePen size={18} className="text-white" />
               </div>
               COMIENZA AQUI
@@ -134,7 +134,7 @@ export function CampaignSidebar({ activeItem = "overview" }: ProfileSidebarProps
               to={`/campaigns/${campaignId}/rewards`}
               className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base text-white ${activeItem === "rewards" ? "bg-[#1c1c1c]" : "hover:bg-[#1c1c1c]"}`}
             >
-              <div className="w-[30px] h-[30px] bg-yellow-600 rounded flex items-center justify-center mr-3">
+              <div className="w-[30px] h-[30px] bg-blue-600 rounded flex items-center justify-center mr-3">
                 <Gift size={18} className="text-white" />
               </div>
               RECOMPENSAS
@@ -144,7 +144,7 @@ export function CampaignSidebar({ activeItem = "overview" }: ProfileSidebarProps
               to={`/campaigns/${campaignId}/videos`}
               className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base text-white ${activeItem === "videos" ? "bg-[#1c1c1c]" : "hover:bg-[#1c1c1c]"}`}
             >
-              <div className="w-[30px] h-[30px] bg-red-600 rounded flex items-center justify-center mr-3">
+              <div className="w-[30px] h-[30px] bg-blue-600 rounded flex items-center justify-center mr-3">
                 <Video size={18} className="text-white" />
               </div>
               MIS VIDEOS
@@ -154,7 +154,7 @@ export function CampaignSidebar({ activeItem = "overview" }: ProfileSidebarProps
               to={`/campaigns/${campaignId}/ads`}
               className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base text-white ${activeItem === "announcements" ? "bg-[#1c1c1c]" : "hover:bg-[#1c1c1c]"}`}
             >
-              <div className="w-[30px] h-[30px] bg-purple-600 rounded flex items-center justify-center mr-3">
+              <div className="w-[30px] h-[30px] bg-blue-600 rounded flex items-center justify-center mr-3">
                 <Megaphone size={18} className="text-white" />
               </div>
               ANUNCIOS
