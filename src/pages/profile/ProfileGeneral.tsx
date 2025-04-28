@@ -10,6 +10,7 @@ interface UserProfile {
   profile_image: string;
   biography: string;
   country: string;
+  phone: string;
 }
 
 interface ProfileErrors {
@@ -20,6 +21,7 @@ interface ProfileErrors {
   profilePicture?: string;
   biography?: string;
   country?: string;
+  phone?: string;
 }
 
 // API endpoint constante
@@ -34,7 +36,8 @@ const ProfileGeneral: React.FC = () => {
     age: null,
     profile_image: '',
     biography: '',
-    country: ''
+    country: '',
+    phone: ''
   });
   
   // Estado para la nueva imagen de perfil
@@ -64,7 +67,8 @@ const ProfileGeneral: React.FC = () => {
       (profile.age === null || (profile.age >= 0 && profile.age <= 120)) &&
       (profile.biography.length <= 500) &&
       (!newProfilePicture || (newProfilePicture.size <= 2 * 1024 * 1024 && 
-        ['image/jpeg', 'image/png', 'image/gif'].includes(newProfilePicture.type)))
+        ['image/jpeg', 'image/png', 'image/gif'].includes(newProfilePicture.type))) &&
+      (!profile.phone.trim() || /^\+?[0-9\s-]{7,20}$/.test(profile.phone.trim()))
     );
   };
 
@@ -94,7 +98,8 @@ const ProfileGeneral: React.FC = () => {
           age: userData.age !== undefined ? userData.age : null,
           profile_image: userData.profile_image || '',
           biography: userData.biography || '',
-          country: userData.country || ''
+          country: userData.country || '',
+          phone: userData.phone || ''
         });
       } else {
         setError('No se pudieron cargar los datos del perfil.');
@@ -149,6 +154,13 @@ const ProfileGeneral: React.FC = () => {
       if (!validTypes.includes(newProfilePicture.type)) {
         newErrors.profilePicture = 'Formato no válido. Use JPG, PNG o GIF';
       }
+    }
+    
+    // Validar teléfono
+    if (!profile.phone.trim()) {
+      newErrors.phone = 'El teléfono es obligatorio';
+    } else if (!/^\+?[0-9\s-]{7,20}$/.test(profile.phone.trim())) {
+      newErrors.phone = 'Teléfono inválido';
     }
     
     setErrors(newErrors);
@@ -246,6 +258,7 @@ const ProfileGeneral: React.FC = () => {
       
       formData.append('biography', profile.biography || '');
       formData.append('country', profile.country || '');
+      formData.append('phone', profile.phone || '');
       
       // Si hay una nueva imagen, añadirla como archivo
       if (newProfilePicture) {
@@ -396,6 +409,13 @@ const ProfileGeneral: React.FC = () => {
           </div>
 
           <div className="mb-6">
+            <label className="block text-sm text-gray-400 mb-1.5">Teléfono</label>
+            <div className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white">
+              {profile.phone || 'No especificado'}
+            </div>
+          </div>
+
+          <div className="mb-6">
             <label className="block text-sm text-gray-400 mb-1.5">Biografía</label>
             <div className="w-full p-2.5 bg-[#101010] border border-[#1c1c1c] rounded-md text-white min-h-[80px] whitespace-pre-wrap">
               {profile.biography || 'No especificado'}
@@ -483,15 +503,54 @@ const ProfileGeneral: React.FC = () => {
 
           <div className="mb-6">
             <label className="block text-sm text-gray-400 mb-1.5">País</label>
-            <input
+            <select
               className={`w-full p-2.5 bg-[#101010] border ${errors.country ? 'border-red-500' : 'border-[#1c1c1c]'} rounded-md text-white focus:outline-none focus:border-[#272727]`}
-              placeholder="País"
-              type="text"
               value={profile.country}
               onChange={(e) => handleInputChange('country', e.target.value)}
-            />
+              required
+            >
+              <option value="">Selecciona un país</option>
+              <option value="Argentina">Argentina</option>
+              <option value="Bolivia">Bolivia</option>
+              <option value="Brasil">Brasil</option>
+              <option value="Chile">Chile</option>
+              <option value="Colombia">Colombia</option>
+              <option value="Costa Rica">Costa Rica</option>
+              <option value="Cuba">Cuba</option>
+              <option value="Ecuador">Ecuador</option>
+              <option value="El Salvador">El Salvador</option>
+              <option value="Guatemala">Guatemala</option>
+              <option value="Honduras">Honduras</option>
+              <option value="México">México</option>
+              <option value="Nicaragua">Nicaragua</option>
+              <option value="Panamá">Panamá</option>
+              <option value="Paraguay">Paraguay</option>
+              <option value="Perú">Perú</option>
+              <option value="Puerto Rico">Puerto Rico</option>
+              <option value="República Dominicana">República Dominicana</option>
+              <option value="Uruguay">Uruguay</option>
+              <option value="Venezuela">Venezuela</option>
+              <option value="Estados Unidos">Estados Unidos</option>
+              <option value="Canadá">Canadá</option>
+              <option value="España">España</option>
+            </select>
             {errors.country && (
               <p className="text-red-500 text-xs mt-1">{errors.country}</p>
+            )}
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm text-gray-400 mb-1.5">Teléfono</label>
+            <input
+              className={`w-full p-2.5 bg-[#101010] border ${errors.phone ? 'border-red-500' : 'border-[#1c1c1c]'} rounded-md text-white focus:outline-none focus:border-[#272727]`}
+              placeholder="Teléfono"
+              type="tel"
+              value={profile.phone}
+              onChange={(e) => handleInputChange('phone', e.target.value)}
+              required
+            />
+            {errors.phone && (
+              <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
             )}
           </div>
 

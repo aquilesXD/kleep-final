@@ -370,62 +370,46 @@ const ProfileBalance = () => {
         </div>
       );
     }
-    
-    if (videos.length === 0) {
-      return (
-        <div className="bg-[#0c0c0c] border border-[#1c1c1c] rounded p-4 text-center">
-          <p className="text-white mb-4">No hay videos disponibles para mostrar.</p>
-        </div>
-      );
-    }
 
+    // Vista de escritorio: una sola tabla para todos los videos
     return (
       <>
-        {/* Mostrar videos individuales */}
-        {campaigns.map((campaign) => {
-          // Filtrar videos por campaña (por ID o por nombre si no hay ID)
-          const campaignVideos = videos.filter(
-            video => 
-              video.campaign_id === campaign.id || 
-              (video.campaign_id === null && video.campaign === campaign.name)
-          );
-          
-          // Si la campaña no tiene videos, no la mostramos
-          if (campaignVideos.length === 0) {
-            return null;
-          }
-          
-          return (
-            <div key={`campaign-${campaign.id}`} className="mb-8">
-              {/* Videos de la campaña */}
-              <h4 className="text-white font-medium mb-3">Videos para esta campaña</h4>
-              
-              {/* Vista de escritorio */}
-              <div className="hidden md:block bg-[#0c0c0c] border border-[#1c1c1c] rounded">
-                <table className="w-full">
-                  <thead className="border-b border-[#1c1c1c] text-left text-xs text-gray-500">
-                    <tr>
-                      <th className="px-4 py-3 text-left">CAMPAÑAS</th>
-                      <th className="px-4 py-3 text-left">CUENTAS</th>
-                      <th className="px-4 py-3 text-left">VIDEO</th>
-                      <th className="px-4 py-3 text-right">VISTAS</th>
-                      <th className="px-4 py-3 text-right">TOTAL A PAGAR</th>
-                      <th className="px-4 py-3 text-left">ESTADO</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-white">
-                    {campaignVideos.map((video, i) => renderVideoTableRow(video, i, false))}
-                  </tbody>
-                </table>
-              </div>
-              
-              {/* Vista móvil */}
-              <div className="md:hidden">
-                {campaignVideos.map((video, i) => renderMobileVideoCard(video, i, false))}
-              </div>
+        <div className="hidden md:block bg-[#0c0c0c] border border-[#1c1c1c] rounded">
+          <table className="w-full">
+            <thead className="border-b border-[#1c1c1c] text-left text-xs text-gray-500">
+              <tr>
+                <th className="px-4 py-3 text-left">CAMPAÑAS</th>
+                <th className="px-4 py-3 text-left">CUENTAS</th>
+                <th className="px-4 py-3 text-left">VIDEO</th>
+                <th className="px-4 py-3 text-right">VISTAS</th>
+                <th className="px-4 py-3 text-right">TOTAL A PAGAR</th>
+                <th className="px-4 py-3 text-left">ESTADO</th>
+              </tr>
+            </thead>
+            <tbody className="text-white">
+              {videos.length > 0 ? (
+                videos.map((video, i) => renderVideoTableRow(video, i, true))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="px-4 py-3 text-center text-gray-400">
+                    No hay videos para mostrar
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Vista móvil: una sola lista para todos los videos */}
+        <div className="md:hidden">
+          {videos.length > 0 ? (
+            videos.map((video, i) => renderMobileVideoCard(video, i, true))
+          ) : (
+            <div className="bg-[#0c0c0c] border border-[#1c1c1c] rounded-md p-3 mb-3 text-center text-gray-400">
+              No hay videos para mostrar
             </div>
-          );
-        })}
+          )}
+        </div>
       </>
     );
   };
@@ -704,7 +688,7 @@ const ProfileBalance = () => {
             >
               Videos ({videos.length})
             </button>
-            <button
+            {/* <button
               className={`py-2 px-4 font-medium text-sm ${
                 activeTab === "depositos"
                   ? "text-white border-b-2 border-[#7c3aed]"
@@ -713,7 +697,7 @@ const ProfileBalance = () => {
               onClick={() => setActiveTab("depositos")}
             >
               Depósitos ({deposits.length})
-            </button>
+            </button> */}
           </div>
         </div>
       </div>

@@ -21,6 +21,7 @@ interface RewardCardProps {
     status?: string
     isJoined?: boolean
     banner_image?: string
+    created_at?: string
   }
   showEarnings?: boolean
 }
@@ -61,6 +62,13 @@ export function RewardCard({ reward, showEarnings = false }: RewardCardProps) {
             </div>
             <div>
               <p className="font-medium text-white">{reward.creator}</p>
+              <p className="font-medium text-xs text-gray-400">
+                {new Date(reward.created_at || '').toLocaleDateString('es-ES', {
+                  year: 'numeric',
+                  month: 'long', 
+                  day: 'numeric'
+                })}
+              </p>
             </div>
             {showEarnings && reward.status && (
               <div className="ml-auto">

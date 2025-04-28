@@ -1,109 +1,112 @@
-import { Link } from "react-router-dom"
-import { Video, BarChart2, Medal, MapPin, SquarePen } from "lucide-react"
-import { useState, useEffect, useCallback } from "react"
-import { getAuthToken } from "../../services/authService" // Asegúrate de importar esto si no estaba
+import React, { useState, useEffect } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { SquarePen, Gift, Video, Megaphone } from 'lucide-react';
+import { getAuthToken } from '../../services/authService';
 
 interface ProfileSidebarProps {
-  activeItem?: "overview" | "start-here" | "rewards" | "videos" | "ads"
+  activeItem?: string;
 }
 
-interface Campaign {
-  id: number;
-  name: string;
-  banner_image: string;
-  logo?: string;
-}
+// Valores por defecto
+const defaultBanner = "https://img-v2-prod.whop.com/rEuqtdgmTyTyI2bULxNzKfor_PpwqFmSgZj4FyUWvx0/rs:fit:1280:720/el:1/dpr:2/aHR0cHM6Ly9hc3NldHMud2hvcC5jb20vdXBsb2Fkcy8yMDI1LTAxLTI2L3VzZXJfMjE3MzE2OF83NjA0ZmU3OC02MmYwLTQ1ZTctYjFjZS1jNmZlOGVhYzQ3MGQuanBlZw";
 
 export function CampaignSidebar({ activeItem = "overview" }: ProfileSidebarProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isJoined, setIsJoined] = useState(false);
-  const [campaignData, setCampaignData] = useState<Campaign | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [authState, setAuthState] = useState({
+    isAuthenticated: false,
+    isJoined: false,
+    loading: true
+  });
+  const [campaignData, setCampaignData] = useState<any>(null);
+  const { campaignId = "1" } = useParams<{ campaignId: string }>();
 
-  const fetchCampaignData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const token = getAuthToken();
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      };
-
-      if (token) {
-        headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
-      }
-
-      // Obtener campañas normales
-      const response = await fetch('https://contabl.net/kleep/api/campaigns', {
-        method: 'GET',
-        headers
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error al obtener datos de campaña: ${response.status}`);
-      }
-
-      const data = await response.json();
-      let campaigns = Array.isArray(data) ? data : Array.isArray(data.campaigns) ? data.campaigns : [];
-
-      if (campaigns.length > 0) {
-        setCampaignData(campaigns[0]);
-      }
-
-      // 🚨 Consultar campañas unidas
-      const joinedResponse = await fetch('https://contabl.net/kleep/api/campaigns/joined', {
-        method: 'GET',
-        headers
-      });
-
-      if (!joinedResponse.ok) {
-        console.error(`Error al obtener campañas unidas (${joinedResponse.status})`);
-      } else {
-        const joinedData = await joinedResponse.json();
-        if (joinedData.campaigns && Array.isArray(joinedData.campaigns) && joinedData.campaigns.length > 0) {
-          setIsJoined(true);
-        } else {
-          setIsJoined(false);
-        }
-      }
-
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // Obtener datos de la campaña
   useEffect(() => {
-    const authStatus = localStorage.getItem("isAuthenticated");
-    const userEmail = localStorage.getItem("userEmail");
-    const isAuth = Boolean(authStatus && userEmail);
-    setIsAuthenticated(isAuth);
+    const fetchCampaignData = async () => {
+      try {
+        const token = getAuthToken();
+        if (!token) return;
+
+        const response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}`, {
+          headers: {
+            'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setCampaignData(data.campaign);
+        }
+      } catch (error) {
+        console.error('Error fetching campaign data:', error);
+      }
+    };
 
     fetchCampaignData();
-  }, [fetchCampaignData]);
+  }, [campaignId]);
 
-  const defaultBanner = "https://img-v2-prod.whop.com/rEuqtdgmTyTyI2bULxNzKfor_PpwqFmSgZj4FyUWvx0/rs:fit:1280:720/el:1/dpr:2/aHR0cHM6Ly9hc3NldHMud2hvcC5jb20vdXBsb2Fkcy8yMDI1LTAxLTI2L3VzZXJfMjE3MzE2OF83NjA0ZmU3OC02MmYwLTQ1ZTctYjFjZS1jNmZlOGVhYzQ3MGQuanBlZw";
-  const defaultLogo = "https://img-v2-prod.whop.com/6h3sfg_FqzkV8VtmHQ41wHmNYgK6xQepCrUU9lSl0wI/rs:fill:80:80/el:1/dpr:2/aHR0cHM6Ly9hc3NldHMud2hvcC5jb20vdXBsb2Fkcy8yMDI1LTAyLTExL3VzZXJfMjE3MzE2OF85NTc2MmVhOS1kZjdhLTQ2OWItODE5YS1lZGI5NTcwZGMwYzguanBlZw";
-  const defaultName = "Campaña";
+  // Verificar autenticación y estado de unión a la campaña
+  useEffect(() => {
+    const checkAuthAndJoinedStatus = async () => {
+      try {
+        const token = getAuthToken();
+        const isAuth = Boolean(token);
+        
+        if (!isAuth) {
+          setAuthState({ isAuthenticated: false, isJoined: false, loading: false });
+          return;
+        }
+
+        // Verificar si está unido a la campaña
+        const response = await fetch(`https://contabl.net/kleep/api/campaigns/joined`, {
+          headers: {
+            'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const isJoined = data.campaigns?.some((campaign: any) => campaign.id === parseInt(campaignId));
+          setAuthState({ isAuthenticated: true, isJoined, loading: false });
+        } else {
+          setAuthState({ isAuthenticated: true, isJoined: false, loading: false });
+        }
+      } catch (error) {
+        console.error('Error checking auth and joined status:', error);
+        setAuthState({ isAuthenticated: false, isJoined: false, loading: false });
+      }
+    };
+
+    checkAuthAndJoinedStatus();
+  }, [campaignId]);
+
+  // Si está cargando, mostrar un spinner
+  if (authState.loading) {
+    return (
+      <aside className="w-full lg:w-[375px] lg:min-h-screen border-r border-[#2a2a2a] p-6 bg-[#121212] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-violet-500"></div>
+      </aside>
+    );
+  }
 
   return (
     <aside className="w-full lg:w-[375px] lg:min-h-screen border-r border-[#2a2a2a] p-6 bg-[#121212]">
-      <div className="relative h-[150px] rounded-xl overflow-hidden mb-6">
-        <img
-          src={campaignData?.banner_image || defaultBanner}
-          alt="Campaign banner"
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-black/50"></div>
-        <div className="absolute top-4 left-4 flex items-center z-10">
+      {/* Banner de la campaña */}
+      {campaignData?.banner_image && (
+        <div className="relative h-[150px] rounded-xl overflow-hidden mb-6">
+          <img
+            src={campaignData.banner_image}
+            alt="Banner de la campaña"
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-black/50"></div>
         </div>
-      </div>
+      )}
 
+      {/* Menú de navegación */}
       <nav className="space-y-2">
+        {/* Botón de Resumen (siempre visible) */}
         <Link
           to="/campaign"
           className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base text-white ${activeItem === "overview" ? "bg-[#1c1c1c]" : "hover:bg-[#1c1c1c]"}`}
@@ -114,52 +117,51 @@ export function CampaignSidebar({ activeItem = "overview" }: ProfileSidebarProps
           Resumen
         </Link>
 
-        <div className="pt-4 border-t border-[#2a2a2a] mt-4">
-          {isAuthenticated && isJoined && (
-            <>
-              <Link
-                to="/campaign-start-here"
-                className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base transition-colors text-white ${activeItem === "start-here" ? "bg-[#1c1c1c]" : "hover:bg-[#1c1c1c]"}`}
-              >
-                <div className="w-[30px] h-[30px] bg-blue-600 rounded flex items-center justify-center mr-3">
-                  <MapPin size={18} className="text-white" />
-                </div>
-                COMIENZA AQUÍ
-              </Link>
+        {/* Botones que solo se muestran cuando el usuario está autenticado y unido */}
+        {authState.isAuthenticated && authState.isJoined && (
+          <>
+            <Link
+              to={`/campaigns/${campaignId}/start`}
+              className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base text-white ${activeItem === "start" ? "bg-[#1c1c1c]" : "hover:bg-[#1c1c1c]"}`}
+            >
+              <div className="w-[30px] h-[30px] bg-green-600 rounded flex items-center justify-center mr-3">
+                <SquarePen size={18} className="text-white" />
+              </div>
+              COMIENZA AQUI
+            </Link>
 
-              <Link
-                to="/campaign-rewards"
-                className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base transition-colors text-white ${activeItem === "rewards" ? "bg-[#1c1c1c]" : "hover:bg-[#1c1c1c]"}`}
-              >
-                <div className="w-[30px] h-[30px] bg-blue-600 rounded flex items-center justify-center mr-3">
-                  <Medal size={18} className="text-white" />
-                </div>
-                RECOMPENSAS
-              </Link>
+            <Link
+              to={`/campaigns/${campaignId}/rewards`}
+              className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base text-white ${activeItem === "rewards" ? "bg-[#1c1c1c]" : "hover:bg-[#1c1c1c]"}`}
+            >
+              <div className="w-[30px] h-[30px] bg-yellow-600 rounded flex items-center justify-center mr-3">
+                <Gift size={18} className="text-white" />
+              </div>
+              RECOMPENSAS
+            </Link>
 
-              <Link
-                to="/campaign-videos"
-                className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base transition-colors text-white ${activeItem === "videos" ? "bg-[#1c1c1c]" : "hover:bg-[#1c1c1c]"}`}
-              >
-                <div className="w-[30px] h-[30px] bg-blue-600 rounded flex items-center justify-center mr-3">
-                  <Video size={18} className="text-white" />
-                </div>
-                MIS VIDEOS
-              </Link>
+            <Link
+              to={`/campaigns/${campaignId}/videos`}
+              className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base text-white ${activeItem === "videos" ? "bg-[#1c1c1c]" : "hover:bg-[#1c1c1c]"}`}
+            >
+              <div className="w-[30px] h-[30px] bg-red-600 rounded flex items-center justify-center mr-3">
+                <Video size={18} className="text-white" />
+              </div>
+              MIS VIDEOS
+            </Link>
 
-              <Link
-                to="/campaign-ads"
-                className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base transition-colors text-white ${activeItem === "ads" ? "bg-[#1c1c1c]" : "hover:bg-[#1c1c1c]"}`}
-              >
-                <div className="w-[30px] h-[30px] bg-blue-600 rounded flex items-center justify-center mr-3">
-                  <BarChart2 size={18} className="text-white" />
-                </div>
-                ANUNCIOS
-              </Link>
-            </>
-          )}
-        </div>
+            <Link
+              to={`/campaigns/${campaignId}/ads`}
+              className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base text-white ${activeItem === "announcements" ? "bg-[#1c1c1c]" : "hover:bg-[#1c1c1c]"}`}
+            >
+              <div className="w-[30px] h-[30px] bg-purple-600 rounded flex items-center justify-center mr-3">
+                <Megaphone size={18} className="text-white" />
+              </div>
+              ANUNCIOS
+            </Link>
+          </>
+        )}
       </nav>
     </aside>
-  )
+  );
 }

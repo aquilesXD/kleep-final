@@ -39,7 +39,8 @@ const mapCampaignToReward = (campaign: Campaign) => {
     type: campaign.type,
     platform: campaign.platforms,
     rate: campaign.price_per_view,
-    isJoined: campaign.is_joined
+    isJoined: campaign.is_joined,
+    created_at: campaign.created_at
   };
 }
 
@@ -52,7 +53,7 @@ export default function Home() {
   const [rewards, setRewards] = useState<any[]>([])
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  const [activeSort, setActiveSort] = useState<string | null>(null) // <<< Nuevo estado para el botón activo
+  const [activeSort, setActiveSort] = useState<string | null>(null)
 
   // Verificar autenticación al montar el componente
   useEffect(() => {
@@ -65,10 +66,6 @@ export default function Home() {
     
     const isAuth = Boolean(authStatus && (userEmail || token));
     setIsAuthenticated(isAuth);
-    
-    if (!isAuth) {
-      console.warn("Usuario no autenticado, algunas funciones pueden no estar disponibles");
-    }
   }, []);
 
   useEffect(() => {
@@ -77,22 +74,32 @@ export default function Home() {
         setLoading(true);
         const token = getAuthToken();
         
-        if (!token) {
-          console.error("No authentication token available");
-          setError("No se pudo autenticar. Por favor, inicie sesión nuevamente.");
-          setLoading(false);
-          return;
+        // Endpoint para obtener campañas públicas o autenticadas
+        const endpoint = 'https://contabl.net/kleep/api/campaigns';
+        
+        // Si hay token, incluir en la petición, sino hacer petición sin autenticación
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        };
+        
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          console.log("Fetching campaigns with token:", token.substring(0, 5) + "...");
+        } else {
+          console.log("Fetching public campaigns without authentication");
         }
 
-        console.log("Fetching campaigns with token:", token.substring(0, 5) + "...");
+        let response = await fetch(endpoint, { headers });
 
-        let response = await fetch('https://contabl.net/kleep/api/campaigns', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-        });
+        // Si el endpoint autenticado falla, intentar obtener campañas públicas
+        if (!response.ok && token) {
+          console.warn(`Error with authenticated request (${response.status}), trying public endpoint`);
+          
+          // Eliminar el encabezado de autorización para obtener campañas públicas
+          delete headers['Authorization'];
+          response = await fetch(endpoint, { headers });
+        }
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -116,7 +123,8 @@ export default function Home() {
         const initialMappedRewards = allCampaigns.map(mapCampaignToReward);
         setRewards(initialMappedRewards);
 
-        if (isAuthenticated) {
+        // Solo obtener campañas unidas si el usuario está autenticado
+        if (isAuthenticated && token) {
           try {
             const joinedResponse = await fetch('https://contabl.net/kleep/api/campaigns/joined', {
               headers: {
@@ -164,7 +172,7 @@ export default function Home() {
   }, [isAuthenticated]);
 
   const handleSortBy = (sortType: string) => {
-    setActiveSort(sortType); // <<< Actualizar el botón activo
+    setActiveSort(sortType);
     let sortedCampaigns = [...campaigns];
     
     switch(sortType) {
@@ -217,7 +225,7 @@ export default function Home() {
                     ${activeSort === 'highest_cpm' ? 'bg-blue-500' : 'bg-[#1c1c1c] hover:bg-violet-600'}
                   `}
                 >
-                  CPM más alto
+                  CPM
                 </button>
 
                 <button 

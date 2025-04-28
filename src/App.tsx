@@ -53,10 +53,10 @@ function App() {
           {/* Other Campaign Routes (pueden requerir autenticación) */}
           <Route path="/campaign" element={<Campaign />} />
           <Route path="/campaign/:campaignId" element={<Campaign />} />
-          <Route path="/campaign-start-here" element={<CampaignStartHere />} />
-          <Route path="/campaign-rewards" element={<CampaignRewards />} />
-          <Route path="/campaign-ads" element={<CampaignAds />} />
-          <Route path="/campaign-videos" element={<CampaignVideos />} />
+          <Route path="/campaigns/:campaignId/start" element={<CampaignStartHere />} />
+          <Route path="/campaigns/:campaignId/rewards" element={<CampaignRewards />} />
+          <Route path="/campaigns/:campaignId/ads" element={<CampaignAds />} />
+          <Route path="/campaigns/:campaignId/videos" element={<CampaignVideos />} />
 
           {/* Notifications Route */}
           <Route path="/notifications" element={<NotificationsPage />} />

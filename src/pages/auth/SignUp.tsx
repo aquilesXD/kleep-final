@@ -12,8 +12,8 @@ const SignUp: React.FC = () => {
   const [name, setName] = useState<string>('');
   const [username, setUsername] = useState<string>('');
   const [age, setAge] = useState<number | ''>('');
-  const [profileImage, setProfileImage] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [country, setCountry] = useState<string>('');
+  const [phone, setPhone] = useState<string>('');
   const [isValidForm, setIsValidForm] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,13 +103,15 @@ const SignUp: React.FC = () => {
       email.trim().length > 0 &&
       name.trim().length > 0 && 
       username.trim().length > 0 &&
-      (typeof age === 'number' || age.toString().trim() !== '')
+      (typeof age === 'number' || age.toString().trim() !== '') &&
+      country.trim().length > 0 &&
+      phone.trim().length > 0
     );
-  }, [email, name, username, age]);
+  }, [email, name, username, age, country, phone]);
 
   // Clases para los inputs
-  const getInputClassName = (isValid: boolean) => {
-    return `w-full py-3 px-4 bg-[rgba(28,28,28,0.7)] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a78bfa] border ${isValid ? 'border-[rgba(75,75,75,0.5)]' : 'border-red-500'}`;
+  const getInputClassName = () => {
+    return `w-full py-3 px-4 bg-[rgba(28,28,28,0.7)] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#a78bfa] border border-[rgba(75,75,75,0.5)]`;
   };
 
   // Manejadores de cambios en los campos
@@ -134,15 +136,14 @@ const SignUp: React.FC = () => {
     setError(null);
   };
 
-  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setProfileImage(file);
-      
-      // Crear URL para previsualización
-      const fileUrl = URL.createObjectURL(file);
-      setPreviewUrl(fileUrl);
-    }
+  const handleCountryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCountry(e.target.value);
+    setError(null);
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPhone(e.target.value);
+    setError(null);
   };
 
   // Enviar datos al servidor
@@ -173,10 +174,8 @@ const SignUp: React.FC = () => {
         formData.append('age', age.trim());
       }
       
-      // Solo añadir la imagen si existe
-      if (profileImage && profileImage instanceof File && profileImage.size > 0) {
-        formData.append('profile_image', profileImage);
-      }
+      formData.append('country', country.trim());
+      formData.append('phone', phone.trim());
 
       // Configurar headers
       const headers = new Headers();
@@ -222,7 +221,9 @@ const SignUp: React.FC = () => {
         username,
         email,
         age,
-        has_profile_image: !!profileImage
+        country,
+        phone,
+        has_profile_image: false
       }));
 
       // Notificar éxito
@@ -258,7 +259,7 @@ const SignUp: React.FC = () => {
         <form className="mt-6" onSubmit={handleSubmit}>
           <div className="mb-4">
             <input
-              className={getInputClassName(email.trim().length > 0)}
+              className={getInputClassName()}
               id="email"
               placeholder="Correo electrónico"
               type="email"
@@ -272,7 +273,7 @@ const SignUp: React.FC = () => {
 
           <div className="mb-4">
             <input
-              className={getInputClassName(name.trim().length > 0)}
+              className={getInputClassName()}
               id="name"
               placeholder="Nombre completo"
               type="text"
@@ -286,7 +287,7 @@ const SignUp: React.FC = () => {
 
           <div className="mb-4">
             <input
-              className={getInputClassName(username.trim().length > 0)}
+              className={getInputClassName()}
               id="username"
               placeholder="Nombre de usuario"
               type="text"
@@ -300,7 +301,7 @@ const SignUp: React.FC = () => {
 
           <div className="mb-4">
             <input
-              className={getInputClassName(typeof age === 'number' || age.toString().trim() !== '')}
+              className={getInputClassName()}
               id="age"
               placeholder="Edad"
               type="number"
@@ -311,25 +312,30 @@ const SignUp: React.FC = () => {
             />
           </div>
 
-          <div className="mb-5">
-            <label className="block text-white text-sm mb-2">Foto de perfil (opcional)</label>
-            <div className="flex items-center gap-4">
-              {previewUrl && (
-                <div className="h-16 w-16 rounded-full overflow-hidden bg-[rgba(40,40,40,0.5)]">
-                  <img src={previewUrl} alt="Preview" className="h-full w-full object-cover" />
-                </div>
-              )}
-              <label className="cursor-pointer bg-[rgba(40,40,40,0.5)] hover:bg-[rgba(60,60,60,0.5)] text-white px-4 py-2 rounded-lg transition-colors">
-                {profileImage ? 'Cambiar foto' : 'Subir foto'}
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="image/*"
-                  onChange={handleProfileImageChange}
-                  disabled={isLoading}
-                />
-              </label>
-            </div>
+          <div className="mb-4">
+            <input
+              className={getInputClassName()}
+              id="country"
+              placeholder="País"
+              type="text"
+              value={country}
+              onChange={handleCountryChange}
+              disabled={isLoading}
+              required
+            />
+          </div>
+
+          <div className="mb-4">
+            <input
+              className={getInputClassName()}
+              id="phone"
+              placeholder="Teléfono"
+              type="tel"
+              value={phone}
+              onChange={handlePhoneChange}
+              disabled={isLoading}
+              required
+            />
           </div>
 
           {error && <p className="text-red-500 text-sm mt-1 mb-4">{error}</p>}

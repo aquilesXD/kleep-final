@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { Settings, Link2, ShieldCheck, CreditCard, DollarSign, LogOut } from 'lucide-react';
+import { Settings, Link2, ShieldCheck, CreditCard, DollarSign, LogOut, House, LayoutDashboard } from 'lucide-react';
 import { logout, getAuthToken } from '../../services/authService';
 
 interface ProfileSidebarProps {
@@ -203,6 +203,12 @@ const ProfileSidebar: React.FC<ProfileSidebarProps> = ({ mobile, onCloseMobileMe
 
   // Definimos todos los items del menú, pero solo mostraremos algunos
   const allMenuItems = [
+    {
+      title: 'Dashboard',
+      icon: <LayoutDashboard size={18} strokeWidth={1.75} />,
+      path: '/campaign-home',
+      show: true // Mostrar este elemento
+    },
     {
       title: 'General',
       icon: <Settings size={18} strokeWidth={1.75} />,

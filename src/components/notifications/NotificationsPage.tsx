@@ -275,6 +275,7 @@ export function NotificationsPage() {
         }
 
         const data: ApiResponse = await response.json();
+        console.log('Notificaciones recibidas:', data.notifications);
         
         // Añadir la categoría de fecha a cada notificación
         const notificationsWithDate = data.notifications.map(notification => ({
@@ -335,60 +336,51 @@ export function NotificationsPage() {
 
   // Función para marcar todas las notificaciones como leídas
   const handleMarkAllAsRead = useCallback(async () => {
-    // No hacer nada si el usuario no está autenticado
     if (!isUserAuthenticated()) {
       navigate('/signin');
       return;
     }
-    
+
     try {
-      // Obtener el token mediante la función getAuthToken
       const token = getAuthToken();
-      
-      // Verificar que haya un token válido
       if (!token) {
         setIsAuthError(true);
         navigate('/signin');
         return;
       }
 
-      // Mostrar feedback mientras se procesa
       setShowReadFeedback(true);
 
-      // Llamar a la API para marcar todas las notificaciones como leídas
-      const response = await fetch(`https://contabl.net/kleep/api/notifications/1/read`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
-      });
+      // IDs de notificaciones no leídas
+      const unreadIds = notifications.filter(n => n.read === 0).map(n => n.id);
 
-      if (!response.ok) {
-        throw new Error(`Error al marcar notificaciones como leídas (${response.status})`);
-      }
+      // Marcar cada una como leída
+      await Promise.all(
+        unreadIds.map(id =>
+          fetch(`https://contabl.net/kleep/api/notifications/${id}/read`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            }
+          })
+        )
+      );
 
-      // Actualizar el estado local
+      // Actualizar estado local
       setNotifications(prev => prev.map(notif => ({ ...notif, read: 1 })));
       setUnreadCount(0);
-      
-      // Mantener el mensaje de éxito visible por un tiempo
+
       setTimeout(() => setShowReadFeedback(false), 3000);
-      
-      // Disparar un evento para actualizar el contador en el Sidebar
       window.dispatchEvent(new CustomEvent('notificationsRead'));
-      
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-      console.error('Error al marcar notificaciones como leídas:', errorMessage);
       setShowReadFeedback(false);
-      
-      // Quitar el mensaje de alerta y simplemente ocultar el feedback
       setError('No se pudieron marcar las notificaciones como leídas. Inténtalo de nuevo más tarde.');
       setTimeout(() => setError(null), 3000);
     }
-  }, [navigate]);
+  }, [navigate, notifications]);
 
   // Marcar una notificación como leída
   const handleMarkAsRead = useCallback(async (id: number) => {
@@ -545,25 +537,25 @@ export function NotificationsPage() {
                 </span>
               )}
               <button
-                onClick={handleMarkAllAsRead}
-                className={`px-3 py-1.5 rounded-md ${unreadCount === 0 
-                  ? 'bg-gray-700 text-gray-400 cursor-not-allowed' 
-                  : 'bg-violet-600 hover:bg-violet-700 text-white'} 
+              onClick={handleMarkAllAsRead}
+              className={`px-3 py-1.5 rounded-md ${unreadCount === 0
+                  ? 'bg-violet-600 text-violet-400 cursor-not-allowed'
+                  : 'bg-violet-600 hover:bg-violet-700 text-white'}
                   transition-colors flex items-center gap-2`}
-                disabled={unreadCount === 0 || showReadFeedback}
-              >
-                {showReadFeedback ? (
-                  <>
-                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                    <span>Procesando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Check size={16} />
-                    <span>Marcar todo como leído</span>
-                  </>
-                )}
-              </button>
+              disabled={showReadFeedback} // <-- Ahora solo se deshabilita si showReadFeedback es true
+               >
+              {showReadFeedback ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full text-white"></div>
+                  <span>Procesando...</span>
+                </>
+              ) : (
+                <>
+                  <Check size={16} />
+                  <span className="text-sm text-white">Marcar todo como leído</span>
+                </>
+              )}
+            </button>
             </div>
           </div>
         </div>

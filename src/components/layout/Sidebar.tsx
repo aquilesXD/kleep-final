@@ -209,7 +209,7 @@ const Sidebar = () => {
               title="Notifications"
             >
               <Bell size={20} strokeWidth={1.5} />
-              {hasUnreadNotifications && (
+              {userAuthenticated && hasUnreadNotifications && (
                 <div className="absolute -top-1 -right-1 flex items-center justify-center">
                   <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold">
                     {unreadCount > 9 ? "9+" : unreadCount}

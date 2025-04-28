@@ -70,12 +70,14 @@ interface CampaignResponse {
 }
 
 export default function Campaign() {
-  const { campaignId = "1" } = useParams<{ campaignId: string }>();
-  const [campaignData, setCampaignData] = useState<CampaignResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isAuthError, setIsAuthError] = useState(false);
-  const navigate = useNavigate();
+    const { campaignId = "1" } = useParams<{ campaignId: string }>();
+   console.log("Componente Campaign cargando. campaignId recibido:", campaignId);
+  
+    const [campaignData, setCampaignData] = useState<CampaignResponse | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isAuthError, setIsAuthError] = useState(false);
+    const navigate = useNavigate();
 
   // Cargar datos de la campaña actual
   useEffect(() => {
@@ -196,10 +198,10 @@ export default function Campaign() {
       <Sidebar />
       <div className="pl-20 lg:pl-24">
         <div className="flex flex-col lg:flex-row">
-          <CampaignSidebar 
-            isAuthenticated={Boolean(localStorage.getItem("isAuthenticated") && localStorage.getItem("userEmail"))}
-            isJoined={campaignData?.is_joined || false}
-          />
+        <CampaignSidebar 
+            />
+          
+
           <main className="flex-1 p-4 lg:p-8">
             
             
