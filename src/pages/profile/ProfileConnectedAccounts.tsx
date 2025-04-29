@@ -4,6 +4,10 @@ import tiktokVerificationService from '../../services/tiktokVerificationService'
 import { toast } from 'react-hot-toast';
 import { getAuthToken } from '../../services/authService'; // Importar la función getAuthToken
 import { useNavigate } from 'react-router-dom'; // Importar useNavigate para redirección
+import { useRetry } from '../../hooks/useRetry';
+import { useVerificationCodeCache } from '../../hooks/useVerificationCodeCache';
+import { useNetworkError } from '../../hooks/useNetworkError';
+import { useInputValidation } from '../../hooks/useInputValidation';
 
 interface TikTokAccount {
   id: string;
@@ -67,6 +71,17 @@ const ProfileConnectedAccounts = () => {
   const [verificationLocks, setVerificationLocks] = useState<Map<string, boolean>>(new Map());
   const [pendingOperations, setPendingOperations] = useState<Set<string>>(new Set());
 
+  // Nuevos hooks
+  const { executeWithRetry, isRetrying } = useRetry();
+  const codeCache = useVerificationCodeCache();
+  const { isOnline, handleNetworkError } = useNetworkError();
+  const usernameValidation = useInputValidation('', {
+    required: true,
+    pattern: /^[a-zA-Z0-9._]{1,24}$/,
+    minLength: 1,
+    maxLength: 24
+  });
+
   // Verificar si el usuario está autenticado al cargar el componente
   useEffect(() => {
     const token = getAuthToken();
@@ -84,33 +99,37 @@ const ProfileConnectedAccounts = () => {
     try {
       const authToken = getAuthToken();
       if (!authToken) {
-        navigate('/login'); // Redirigir al login si no hay token
-        return;
-      }
-
-      const accountsData = await tiktokVerificationService.fetchTikTokAccountsFromNewApi();
-
-      // Validar que cada cuenta tenga un `account_id` válido
-      const validatedAccounts = accountsData.map(account => {
-        if (!account.account_id) {
-          return { ...account, account_id: account.id || '' }; // Convertir `null` a cadena vacía
-        }
-        return account;
-      });
-
-      setAccounts(validatedAccounts as TikTokAccount[]); // Asegurar el tipo correcto
-
-      if (validatedAccounts.some(acc => acc.verifiedStatus === 'pending')) {
-        setTimeout(() => checkPendingAccountsStatus(), 1000);
-      }
-    } catch (error: any) {
-      // Si es error de autenticación, redirigir al login
-      if (error.message?.includes('401') || error.message?.includes('No autorizado') || error.message?.includes('token')) {
-        toast.error('Sesión expirada. Por favor, inicia sesión nuevamente.');
         navigate('/login');
         return;
       }
-      setError(`Error al cargar cuentas: ${error.message}`);
+
+      await executeWithRetry(
+        async () => {
+          const accountsData = await tiktokVerificationService.fetchTikTokAccountsFromNewApi();
+          return accountsData;
+        },
+        (accountsData) => {
+          const validatedAccounts = accountsData.map(account => ({
+            ...account,
+            account_id: account.account_id || account.id || ''
+          }));
+          setAccounts(validatedAccounts);
+
+          if (validatedAccounts.some(acc => acc.verifiedStatus === 'pending')) {
+            setTimeout(() => checkPendingAccountsStatus(), 1000);
+          }
+        },
+        (error) => {
+          const networkError = handleNetworkError(error);
+          setError(networkError.message);
+          if (networkError.type === 'AUTH') {
+            navigate('/login');
+          }
+        }
+      );
+    } catch (error: any) {
+      const networkError = handleNetworkError(error);
+      setError(networkError.message);
     } finally {
       setIsLoading(false);
     }
@@ -209,7 +228,7 @@ const ProfileConnectedAccounts = () => {
     }
   };
 
-  // Función para adquirir un lock
+  // Añadir nuevos estados para control de concurrencia
   const acquireLock = (operationId: string): boolean => {
     if (verificationLocks.get(operationId)) {
       return false;
@@ -219,7 +238,6 @@ const ProfileConnectedAccounts = () => {
     return true;
   };
 
-  // Función para liberar un lock
   const releaseLock = (operationId: string) => {
     setVerificationLocks(prev => {
       const newLocks = new Map(prev);
@@ -252,29 +270,38 @@ const ProfileConnectedAccounts = () => {
         .map(acc => acc.account_id)
         .filter((id): id is string => id !== undefined);
 
-      const verificationResults = await tiktokVerificationService.checkVerificationStatus(pendingIds);
-
-      if (verificationResults.length > 0) {
-        setAccounts(prev => {
-          const newAccounts = [...prev];
-          verificationResults.forEach(updatedAcc => {
-            const index = newAccounts.findIndex(acc =>
-              acc.account_id === updatedAcc.account_id || acc.id === updatedAcc.id
-            );
-            if (index !== -1) {
-              if (updatedAcc.isVerified) {
-                newAccounts[index].isVerified = true;
-                newAccounts[index].verifiedStatus = undefined;
-                newAccounts[index].verified_request = undefined;
-                setTimeout(() => {
-                  handleSuccessfulVerification(newAccounts[index], index);
-                }, 500);
-              }
-            }
-          });
-          return newAccounts;
-        });
-      }
+      await executeWithRetry(
+        async () => {
+          const verificationResults = await tiktokVerificationService.checkVerificationStatus(pendingIds);
+          return verificationResults;
+        },
+        (verificationResults) => {
+          if (verificationResults.length > 0) {
+            setAccounts(prev => {
+              const newAccounts = [...prev];
+              verificationResults.forEach(updatedAcc => {
+                const index = newAccounts.findIndex(acc =>
+                  acc.account_id === updatedAcc.account_id || acc.id === updatedAcc.id
+                );
+                if (index !== -1) {
+                  if (updatedAcc.isVerified) {
+                    newAccounts[index].isVerified = true;
+                    newAccounts[index].verifiedStatus = undefined;
+                    newAccounts[index].verified_request = undefined;
+                    setTimeout(() => {
+                      handleSuccessfulVerification(newAccounts[index], index);
+                    }, 500);
+                  }
+                }
+              });
+              return newAccounts;
+            });
+          }
+        },
+        (error) => {
+          console.error('Error al verificar estado de cuentas:', error);
+        }
+      );
     } catch (error) {
       console.error('Error al verificar estado de cuentas:', error);
     } finally {
@@ -294,7 +321,10 @@ const ProfileConnectedAccounts = () => {
     const account = accounts.find(acc => acc.id === id);
     if (!account) return;
 
-    setSelectedAccount(account);
+    setSelectedAccount({
+      ...account,
+      verifiedStatus: 'pending' // Establecer el estado como pendiente al abrir el modal
+    });
 
     // Usar el código proporcionado por el backend
     setVerificationCode(account.tiktok_code || "");
@@ -480,101 +510,116 @@ const ProfileConnectedAccounts = () => {
   };
 
   // Procesar verificación de cuenta (antes handleVerifyAccount)
-  const handleVerifyAccount = () => handleAccountVerification(false);
-  
-  // Intentar verificación manual (antes handleManualCheck)
-  const handleManualCheck = async (accountId: string) => {
-    const account = accounts.find(acc => acc.id === accountId);
-    if (!account) return;
+  const handleVerifyAccount = async () => {
+    if (!selectedAccount) return;
 
-    setSelectedAccount(account);
-    // Usar el código proporcionado por el backend
-    setVerificationCode(account.tiktok_code || "");
-    setShowVerificationModal(true);
-    setVerificationStatus('idle');
-    setStatusMessage('');
+    try {
+      await executeWithRetry(
+        async () => {
+          const result = await tiktokVerificationService.requestTikTokVerification({
+            account_id: selectedAccount.account_id || '',
+            username: selectedAccount.username,
+            verification_code: verificationCode
+          });
+          return result;
+        },
+        (result) => {
+          if (result.success) {
+            codeCache.setCode(selectedAccount.id, verificationCode);
+            // Asegurar que isVerified sea un booleano
+            const isVerified = result.isVerified ?? false;
+            updateAccountStatus(selectedAccount.id, isVerified, !isVerified, verificationCode);
+            setVerificationStatus('success');
+            setStatusMessage(isVerified 
+              ? '¡Cuenta verificada exitosamente!'
+              : 'Proceso de verificación iniciado. La cuenta está en verificación pendiente.');
+            
+            setLastVerificationTime(Date.now());
+            setTimeRemaining(30);
+            startCountdown();
+
+            if (isVerified) {
+              setTimeout(() => {
+                handleCloseModal();
+                toast.success('¡Cuenta verificada exitosamente!');
+              }, 2000);
+            } else {
+              setTimeout(() => {
+                setShowVerificationModal(false);
+                toast.success(`Verificación enviada. Coloca el código ${verificationCode} en tu bio de TikTok.`);
+              }, 2000);
+            }
+          }
+        },
+        (error) => {
+          const networkError = handleNetworkError(error);
+          setVerificationStatus('error');
+          setStatusMessage(networkError.message);
+          if (networkError.type === 'AUTH') {
+            navigate('/login');
+          }
+        }
+      );
+    } catch (error: any) {
+      const networkError = handleNetworkError(error);
+      setVerificationStatus('error');
+      setStatusMessage(networkError.message);
+    }
   };
-
+  
   // Función para reiniciar el proceso de verificación
   const handleResetVerification = async () => {
     if (!selectedAccount) return;
 
-    const operationId = `reset-${selectedAccount.id}`;
-    if (!acquireLock(operationId)) {
-      toast.error('Ya hay una operación en curso para esta cuenta');
-      return;
-    }
-
     try {
-      setIsSubmitting(true);
-      setVerificationStatus('loading');
-      setStatusMessage('Reiniciando proceso de verificación...');
+      await executeWithRetry(
+        async () => {
+          const tiktokUsername = selectedAccount.username.startsWith('@')
+            ? selectedAccount.username.substring(1)
+            : selectedAccount.username;
 
-      // Verificar que account_id existe y es válido
-      if (!selectedAccount.account_id) {
-        setVerificationStatus('error');
-        setStatusMessage('Error: No se puede reiniciar la verificación porque el ID de cuenta es inválido.');
-        setIsSubmitting(false);
-        return;
-      }
+          const result = await tiktokVerificationService.resetTikTokVerification(
+            selectedAccount.account_id || '',
+            tiktokUsername
+          );
+          return result;
+        },
+        (result) => {
+          if (result.success) {
+            setAccounts(prev =>
+              prev.map(acc =>
+                acc.id === selectedAccount.id
+                  ? {
+                      ...acc,
+                      verified_att: 0,
+                      verifiedStatus: 'pending',
+                      verified_request: new Date().toISOString()
+                    }
+                  : acc
+              )
+            );
 
-      // Extraer el nombre de usuario sin el @ si lo tiene
-      const tiktokUsername = selectedAccount.username.startsWith('@')
-        ? selectedAccount.username.substring(1)
-        : selectedAccount.username;
+            setVerificationStatus('success');
+            setStatusMessage('Proceso de verificación reiniciado. La cuenta está en verificación pendiente.');
 
-      // Llamar al servicio con set=1 para reiniciar
-      const result = await tiktokVerificationService.resetTikTokVerification(
-        selectedAccount.account_id,
-        tiktokUsername
-      );
-
-      if (result.success) {
-        // Verificar que el objeto account en el resultado es válido
-        if (!result.account) {
+            setTimeout(() => {
+              handleCloseModal();
+            }, 2000);
+          }
+        },
+        (error) => {
+          const networkError = handleNetworkError(error);
           setVerificationStatus('error');
-          setStatusMessage('Error al reiniciar: La respuesta no incluye información de la cuenta.');
-          setIsSubmitting(false);
-          return;
+          setStatusMessage(networkError.message);
+          if (networkError.type === 'AUTH') {
+            navigate('/login');
+          }
         }
-
-        // Actualizar el estado de la cuenta
-        setAccounts(prev =>
-          prev.map(acc =>
-            acc.id === selectedAccount.id ?
-            {
-              ...acc,
-              verified_att: 0,            // Reiniciar contador
-              verifiedStatus: 'pending',  // Establecer como pendiente inmediatamente
-              verified_request: new Date().toISOString() // Nueva solicitud de verificación
-            } : acc
-          )
-        );
-
-        setVerificationStatus('success');
-        setStatusMessage('Proceso de verificación reiniciado. La cuenta está en verificación pendiente.');
-
-        // Cerrar modal después de 2 segundos sin volver a abrirlo
-        setTimeout(() => {
-          handleCloseModal();
-        }, 2000);
-      } else {
-        setVerificationStatus('error');
-        setStatusMessage(result.message || 'Error al reiniciar la verificación');
-      }
+      );
     } catch (error: any) {
-      // Si es error de autenticación, redirigir al login
-      if (error.message?.includes('401') || error.message?.includes('No autorizado') || error.message?.includes('token')) {
-        toast.error('Sesión expirada. Por favor, inicia sesión nuevamente.');
-        navigate('/login');
-        return;
-      }
-      
+      const networkError = handleNetworkError(error);
       setVerificationStatus('error');
-      setStatusMessage(error.message || 'Error al reiniciar el proceso. Inténtalo más tarde.');
-    } finally {
-      setIsSubmitting(false);
-      releaseLock(operationId);
+      setStatusMessage(networkError.message);
     }
   };
 
@@ -619,7 +664,7 @@ const ProfileConnectedAccounts = () => {
         return (
           <div className="flex items-center text-yellow-600">
             <Clock className="w-4 h-4 mr-1" />
-            <span>Pendiente</span>
+            <span className="text-sm">Verificacion pendiente</span>
           </div>
         );
       case 'verified':
@@ -705,17 +750,58 @@ const ProfileConnectedAccounts = () => {
               <div className="flex flex-wrap gap-4">
                 {accounts.map((account, index) => (
                   <div key={`${account.id}-${index}`} className="relative">
-                    <div className="bg-[#161616] text-white rounded-full px-4 py-2 flex items-center">
-                      <div className={`w-3 h-3 rounded-full mr-2 ${
-                        account.isVerified ? 'bg-green-500' :
-                        account.verifiedStatus === 'pending'
-                          ? (account.verified_att !== undefined && account.verified_att >= 3
-                              ? 'bg-orange-500' : 'bg-yellow-500')
-                          : 'bg-red-500'
-                      }`}></div>
-                      <span>{account.username}</span>
+                    <div className="bg-[#161616] text-white rounded-lg p-4 flex flex-col items-center">
+                      <div className="flex items-center mb-2">
+                        <div className={`w-3 h-3 rounded-full mr-2 ${
+                          account.isVerified 
+                            ? 'bg-green-500'  // Verde: Cuenta verificada
+                            : account.verified_att !== undefined && account.verified_att >= 3
+                              ? 'bg-orange-500'  // Naranja: Límite de intentos alcanzado
+                              : 'bg-yellow-500'  // Amarillo: En proceso de verificación o pendiente
+                        }`}></div>
+                        <span className="font-medium">{account.username}</span>
+                      </div>
+                      
+                      {/* Estado de verificación */}
+                      {account.isVerified ? (
+                        <div className="flex items-center text-green-500">
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          <span className="text-sm">Verificada</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center text-yellow-600">
+                          <Clock className="w-4 h-4 mr-1" />
+                          <span className="text-sm">Verificación pendiente</span>
+                        </div>
+                      )}
+                      
+                      {/* Contador de intentos si es necesario */}
+                      {account.verified_att !== undefined && account.verified_att > 0 && (
+                        <div className="mt-1 text-xs text-gray-400">
+                          Intentos: {account.verified_att}/3
+                        </div>
+                      )}
+                      
                     </div>
-                    {renderVerificationStatus(account)}
+                      {/* Enlace para abrir el modal de verificación */}
+                      {!account.isVerified && (
+                        <button
+                          onClick={() => {
+                            setSelectedAccount({
+                              ...account,
+                              verifiedStatus: 'pending'
+                            });
+                            setVerificationCode(account.tiktok_code || "");
+                            setShowVerificationModal(true);
+                            setVerificationStatus('idle');
+                            setStatusMessage('');
+                          }}
+                          className="mt-2 text-[#8e4dff] hover:text-[#7c3aed] text-sm font-medium underline transition-colors w-full text-center"
+                          disabled={isSubmitting || timeRemaining > 0}
+                        >
+                          Verificar
+                        </button>
+                      )}
                   </div>
                 ))}
               </div>
@@ -767,7 +853,7 @@ const ProfileConnectedAccounts = () => {
               <div className="bg-[#161616] text-white rounded-full px-5 py-2.5 flex items-center">
                 <div className={`w-3 h-3 rounded-full mr-2 ${
                   selectedAccount.isVerified ? 'bg-green-500' :
-                  selectedAccount.verifiedStatus === 'pending'
+                  selectedAccount.verifiedStatus === 'pending' || !selectedAccount.isVerified
                     ? (selectedAccount.verified_att !== undefined && selectedAccount.verified_att >= 3
                         ? 'bg-orange-500' : 'bg-yellow-500')
                     : 'bg-red-500'
@@ -845,17 +931,6 @@ const ProfileConnectedAccounts = () => {
                   ? 'Reiniciar proceso de verificación'
                   : 'Verificar Cuenta de TikTok'}
               </button>
-
-              {selectedAccount && selectedAccount.verifiedStatus === 'pending' && !(typeof selectedAccount.verified_att === 'number' && selectedAccount.verified_att >= 3) && (
-                <button
-                  onClick={() => handleManualCheck(selectedAccount.id)}
-                  className={`w-full mt-2 bg-[#1c1c1c] hover:bg-[#2c2c2c] text-white py-3 px-4 rounded-md text-center transition-colors ${(isSubmitting || timeRemaining > 0) ? 'opacity-70 cursor-not-allowed' : ''}`}
-                  disabled={isSubmitting || verificationStatus === 'success' || timeRemaining > 0}
-                >
-                  {isSubmitting && verificationStatus === 'loading' ? 'Verificando...' :
-                   timeRemaining > 0 ? `Espera ${timeRemaining}s` : 'Ya coloqué el código - Verificar ahora'}
-                </button>
-              )}
             </div>
 
             <div className="mt-4 flex items-center justify-center text-yellow-500 text-sm">

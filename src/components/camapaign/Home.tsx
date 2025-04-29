@@ -83,6 +83,32 @@ export default function Home() {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         };
+
+        let joinedCampaignIds = new Set<number>();
+
+        // Si el usuario está autenticado, primero obtener las campañas unidas
+        if (token && isAuthenticated) {
+          try {
+            const joinedResponse = await fetch('https://contabl.net/kleep/api/campaigns/joined', {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+              },
+            });
+
+            if (joinedResponse.ok) {
+              const joinedData = await joinedResponse.json();
+              if (joinedData.campaigns && Array.isArray(joinedData.campaigns)) {
+                joinedCampaignIds = new Set(
+                  joinedData.campaigns.map((campaign: { id: number }) => campaign.id)
+                );
+              }
+            }
+          } catch (joinedErr) {
+            console.error('Error al obtener campañas unidas:', joinedErr);
+          }
+        }
         
         let response;
         
@@ -114,50 +140,16 @@ export default function Home() {
           throw new Error('Formato de respuesta inválido: no se encontraron campañas');
         }
 
+        // Marcar las campañas como unidas usando el Set de IDs obtenido anteriormente
         const allCampaigns = data.campaigns.map((campaign: Campaign) => ({
           ...campaign,
-          is_joined: false,
+          is_joined: joinedCampaignIds.has(campaign.id),
         }));
 
         setCampaigns(allCampaigns);
         setTotalResults(allCampaigns.length);
-        const initialMappedRewards = allCampaigns.map(mapCampaignToReward);
-        setRewards(initialMappedRewards);
-
-        // Solo obtener campañas unidas si el usuario está autenticado y tiene token
-        if (isAuthenticated && token) {
-          try {
-            const joinedResponse = await fetch('https://contabl.net/kleep/api/campaigns/joined', {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-              },
-            });
-
-            if (!joinedResponse.ok) {
-              console.error(`Error al obtener campañas unidas (${joinedResponse.status})`);
-            } else {
-              const joinedData = await joinedResponse.json();
-
-              if (joinedData.campaigns && Array.isArray(joinedData.campaigns)) {
-                const joinedCampaignIds = new Set(
-                  joinedData.campaigns.map((campaign: { id: number }) => campaign.id)
-                );
-
-                const updatedCampaigns = allCampaigns.map((campaign: Campaign) => ({
-                  ...campaign,
-                  is_joined: joinedCampaignIds.has(campaign.id),
-                }));
-
-                setCampaigns(updatedCampaigns);
-                setRewards(updatedCampaigns.map(mapCampaignToReward));
-              }
-            }
-          } catch (joinedErr) {
-            console.error('Error al obtener campañas unidas:', joinedErr);
-          }
-        }
+        const mappedRewards = allCampaigns.map(mapCampaignToReward);
+        setRewards(mappedRewards);
         setError(null);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
