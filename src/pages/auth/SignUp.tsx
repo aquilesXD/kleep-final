@@ -82,7 +82,7 @@ const SignUp: React.FC = () => {
             retina_detect: true,
           });
         } catch (error) {
-          console.error("Error al inicializar partículas:", error);
+          
         }
       }, 100);
     }
@@ -192,7 +192,6 @@ const SignUp: React.FC = () => {
         throw new Error(responseData.message || 'Error al crear el usuario');
       }
     } catch (error: any) {
-      console.error('Error:', error);
       setError(error.message || 'Error al crear el usuario');
       toast.error(error.message || 'Error al crear el usuario');
     } finally {

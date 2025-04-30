@@ -7,7 +7,7 @@ import axios from "axios"
 
 // API endpoints
 const API_BASE_URL = "https://contabl.net/kleep/api"
-const BALANCE_ENDPOINT = `${API_BASE_URL}/balance`
+const VIDEOS_ENDPOINT = `${API_BASE_URL}/videos`
 const TIKTOK_UNVERIFIED_ACCOUNTS_ENDPOINT = `${API_BASE_URL}/tiktok-accounts/unverified`
 
 // Tipos simplificados
@@ -79,6 +79,18 @@ interface Campaign {
   budget_percentage: string;
   is_joined: boolean;
 }
+
+// Función para calcular el pago de un video
+const calculateVideoPayment = (video: Video): number => {
+  const viewThreshold = video.views_threshold || 1000;
+  const pricePerView = parseFloat(video.price_per_view || '0');
+  
+  if (video.views >= viewThreshold && video.status === 'approved') {
+    // El precio es por cada 1000 vistas, por eso dividimos entre 1000
+    return (video.views * pricePerView) / 1000;
+  }
+  return 0;
+};
 
 const ProfileBalance = () => {
   // Estados principales
@@ -175,8 +187,8 @@ const ProfileBalance = () => {
         throw new Error('No se encontró el token de autenticación')
       }
 
-      // Obtener datos de balance general
-      const balanceResponse = await fetch(BALANCE_ENDPOINT, {
+      // Obtener videos del usuario
+      const videosResponse = await fetch(VIDEOS_ENDPOINT, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -184,97 +196,51 @@ const ProfileBalance = () => {
         }
       })
 
-      if (!balanceResponse.ok) {
-        throw new Error(`Error al obtener datos de balance: ${balanceResponse.status}`)
+      if (!videosResponse.ok) {
+        throw new Error(`Error al obtener datos de videos: ${videosResponse.status}`)
       }
 
-      // Parsear respuesta JSON del balance
-      const balanceData = await balanceResponse.json()
+      // Parsear respuesta JSON de videos
+      const videosData = await videosResponse.json()
 
-      if (!balanceData.success) {
-        throw new Error('La respuesta de la API de balance no indica éxito')
+      if (!videosData.success) {
+        throw new Error('La respuesta de la API de videos no indica éxito')
       }
 
-      // Obtener campañas a las que está unido el usuario
-      const campaignsResponse = await fetch(`${API_BASE_URL}/campaigns/joined`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const campaignsData = await campaignsResponse.json();
-
-      // Establecer campañas directamente desde la respuesta
-      if (campaignsData.success && campaignsData.campaigns) {
-        setCampaigns(campaignsData.campaigns);
-      } else {
-        setCampaigns([]);
-      }
-
+      // Obtener el ID de la campaña actual de la URL
+      const currentCampaignId = window.location.pathname.match(/\/campaigns\/(\d+)/)?.[1];
+      
+      // Filtrar y procesar videos
       let videosList = [];
-      
-      // Procesar videos del balance
-      if (balanceData.videos && Array.isArray(balanceData.videos) && balanceData.videos.length > 0) {
-        videosList = balanceData.videos.map((item: any, index: number) => {
-          // Normalizar estado: "pending"/"approved"/"rejected" a 0/1/2
-          let numStatus = 0;
-          if (typeof item.status === 'string') {
-            if (item.status === 'approved') numStatus = 1;
-            else if (item.status === 'rejected') numStatus = 2;
-          } else if (typeof item.status === 'number') {
-            numStatus = item.status;
-          }
-
-          return {
-            id: item.id || `video-${index}`,
-            title: item.title || `Vídeo ${index + 1}`,
-            url: item.url || '',
-            campaign: item.campaign || "Campaña estándar",
-            campaign_id: item.campaign_id || null,
-            account_username: item.tiktok_username || item.account || item.creator || '',
-            video_link: item.url || item.video_link || "#",
-            views: typeof item.views === 'number' ? item.views : parseInt(item.views || '0'),
-            views_threshold: item.views_threshold || 1000,
-            price_per_view: item.price_per_view || '0.001',
-            total_to_pay: parseFloat(item.payout || item.total_to_pay || "0") || 0,
-            status: numStatus,
-            status_note: item.status_note || item.rejection_reason || "",
-            date: item.created_at || new Date().toISOString().split("T")[0]
-          };
-        });
-      } 
-      
-      // No filtrar videos por email
-      setVideos(videosList);
-      
-      // Extraer las campañas únicas de los videos si no tenemos campañas de la API
-      if ((!campaignsData.success || !campaignsData.campaigns || campaignsData.campaigns.length === 0) && videosList.length > 0) {
-        const uniqueCampaigns = Array.from(new Set(videosList.map((video: Video) => video.campaign))) as string[];
-        const campaignsFromVideos = uniqueCampaigns.map((campaignName: string, index) => ({
-          id: index + 1,
-          name: campaignName,
-          description: `Descripción para ${campaignName}`,
-          type: 'General',
-          banner_image: `https://picsum.photos/800/300?random=${index + 1}`,
-          profile_image: 'https://randomuser.me/api/portraits/men/1.jpg',
-          total_budget: '5000.00',
-          price_per_view: '0.002000',
-          platforms: 'TikTok',
-          budget_spent: '1000.00',
-          created_at: new Date().toISOString(),
-          admin_name: 'Administrador',
-          admin_profile_image: 'https://randomuser.me/api/portraits/men/1.jpg',
-          joined_at: new Date().toISOString(),
-          budget_percentage: '20',
-          is_joined: true
-        }));
-        
-        setCampaigns(campaignsFromVideos);
+      if (videosData.videos && Array.isArray(videosData.videos)) {
+        videosList = videosData.videos
+          .filter((item: any) => {
+            // Si estamos en una campaña específica, filtrar por campaign_id
+            if (currentCampaignId) {
+              return item.campaign_id === parseInt(currentCampaignId);
+            }
+            return true; // Si no hay campaign_id en la URL, mostrar todos los videos
+          })
+          .map((item: any) => ({
+            id: item.id,
+            title: "Ver video",
+            url: item.url,
+            campaign: item.campaign,
+            campaign_id: item.campaign_id,
+            account_username: item.account || 'Verificando...',
+            video_link: item.url,
+            views: item.views,
+            views_threshold: item.views_threshold,
+            price_per_view: item.price_per_view,
+            total_to_pay: calculateVideoPayment(item),
+            status: item.status,
+            date: item.created_at
+          }));
       }
 
-      // Calcular totales y balance
+      setVideos(videosList);
+
+      // Calcular totales para el balance
       let pendingVideos = 0;
       let approvedVideos = 0;
       let rejectedVideos = 0;
@@ -282,48 +248,38 @@ const ProfileBalance = () => {
 
       // Contar videos por estado y calcular balance total
       videosList.forEach((video: Video) => {
-        const viewThreshold = video.views_threshold || 1000;
-        
-        // Solo sumar al balance total si tiene suficientes vistas y está aprobado
-        if (video.views >= viewThreshold && (video.status === 1 || video.status === 'approved')) {
-          const amount = typeof video.total_to_pay === 'number' 
-            ? video.total_to_pay 
-            : parseFloat(video.payout || '0');
-          totalBalance += amount;
-        }
-
         // Contar videos por estado
-        if (video.status === 0 || video.status === 'pending') pendingVideos++;
-        else if (video.status === 1 || video.status === 'approved') approvedVideos++;
-        else if (video.status === 2 || video.status === 'rejected') rejectedVideos++;
+        if (video.status === 'pending') pendingVideos++;
+        else if (video.status === 'approved') approvedVideos++;
+        else if (video.status === 'rejected') rejectedVideos++;
+
+        // Sumar al balance total
+        totalBalance += calculateVideoPayment(video);
       });
 
-      // Aplicar totales al estado del balance
-      const balanceObj = {
-        // Si la API proporciona valores, usarlos; de lo contrario, usar los calculados
-        total: balanceData.balance?.total !== undefined ? balanceData.balance.total : totalBalance,
-        pending_videos: balanceData.balance?.pending_videos !== undefined ? balanceData.balance.pending_videos : pendingVideos,
-        approved_videos: balanceData.balance?.approved_videos !== undefined ? balanceData.balance.approved_videos : approvedVideos,
-        rejected_videos: balanceData.balance?.rejected_videos !== undefined ? balanceData.balance.rejected_videos : rejectedVideos
-      };
+      // Actualizar el balance
+      setBalance({
+        total: totalBalance,
+        pending_videos: pendingVideos,
+        approved_videos: approvedVideos,
+        rejected_videos: rejectedVideos
+      });
 
-      // Si el total de la API es 0 o no está definido, usar el calculado
-      if (!balanceObj.total || balanceObj.total === 0) {
-        balanceObj.total = totalBalance;
-      }
-
-      setBalance(balanceObj);
-
-      // Usar directamente los depósitos de la API
-      if (balanceData.deposits && Array.isArray(balanceData.deposits)) {
-        setDeposits(balanceData.deposits)
-      }
     } catch (error: any) {
       setError(`No se pudieron cargar los datos: ${error.message}`)
     } finally {
       setIsLoading(false)
     }
   }
+
+  // Agregar efecto para recargar datos cuando cambie la URL
+  useEffect(() => {
+    // Recargar datos cuando cambie la URL (cambio de campaña)
+    const currentCampaignId = window.location.pathname.match(/\/campaigns\/(\d+)/)?.[1];
+    if (currentCampaignId) {
+      fetchBalanceData();
+    }
+  }, [window.location.pathname]);
 
   // Manejadores de eventos
   const handleShowRejectionModal = (videoId: string | number) => {
@@ -387,7 +343,64 @@ const ProfileBalance = () => {
             </thead>
             <tbody className="text-white">
               {videos.length > 0 ? (
-                videos.map((video, i) => renderVideoTableRow(video, i, true))
+                videos.map((video, i) => (
+                  <tr key={`video-row-${i}`} className="border-b border-[#1c1c1c]">
+                    <td className="px-4 py-3 text-white">{video.campaign || "Sin campaña"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col">
+                        <span>{video.account_username || 'Sin nombre'}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <a
+                        href={video.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#7c3aed] flex items-center hover:underline"
+                      >
+                        Ver video <ExternalLink size={16} className="ml-1" />
+                      </a>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={video.views < (video.views_threshold || 1000) ? "text-yellow-500" : ""}>
+                        {video.views.toLocaleString()}
+                      </span>
+                      {video.views < (video.views_threshold || 1000) && (
+                        <span className="block text-xs text-yellow-500">
+                          Mínimo {(video.views_threshold || 1000).toLocaleString()} vistas
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="font-medium">
+                        ${calculateVideoPayment(video).toFixed(2)}
+                        {video.views < (video.views_threshold || 1000) && (
+                          <span className="block text-yellow-500 text-xs">* Pendiente de vistas</span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={video.status === 'rejected' ? () => handleVerificationToggle(video.id) : undefined}
+                        className={`px-3 py-1 rounded text-sm flex items-center ${
+                          video.status === 'pending'
+                            ? "bg-yellow-900/30 text-yellow-500 border border-yellow-700"
+                            : video.status === 'approved'
+                            ? "bg-green-900/30 text-green-500 border border-green-700"
+                            : "bg-red-900/30 text-red-500 border border-red-700"
+                        }`}
+                      >
+                        {video.status === 'pending' ? (
+                          <><Clock size={16} className="mr-1" />En proceso</>
+                        ) : video.status === 'approved' ? (
+                          <><Check size={16} className="mr-1" />Aprobado</>
+                        ) : (
+                          <><X size={16} className="mr-1" />Rechazado</>
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                ))
               ) : (
                 <tr>
                   <td colSpan={6} className="px-4 py-3 text-center text-gray-400">
@@ -402,7 +415,74 @@ const ProfileBalance = () => {
         {/* Vista móvil: una sola lista para todos los videos */}
         <div className="md:hidden">
           {videos.length > 0 ? (
-            videos.map((video, i) => renderMobileVideoCard(video, i, true))
+            videos.map((video, i) => (
+              <div
+                key={`video-mobile-${i}`}
+                className="bg-[#0c0c0c] border border-[#1c1c1c] rounded-md p-3 mb-3"
+              >
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-gray-500">Campaña:</p>
+                    <p className="text-white">{video.campaign || "Sin campaña"}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Creador:</p>
+                    <p className="text-white">{video.account_username || 'Sin nombre'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Vistas:</p>
+                    <p className={`${video.views < (video.views_threshold || 1000) ? "text-yellow-500" : "text-white"}`}>
+                      {video.views.toLocaleString()}
+                      {video.views < (video.views_threshold || 1000) && (
+                        <span className="block text-xs">
+                          Mínimo {(video.views_threshold || 1000).toLocaleString()} vistas
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Total a pagar:</p>
+                    <p className="text-white font-medium">
+                      ${calculateVideoPayment(video).toFixed(2)}
+                      {video.views < (video.views_threshold || 1000) && (
+                        <span className="block text-yellow-500 text-xs">Pendiente de vistas</span>
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Estado:</p>
+                    <button
+                      onClick={video.status === 'rejected' ? () => handleVerificationToggle(video.id) : undefined}
+                      className={`px-2 py-1 rounded text-xs flex items-center ${
+                        video.status === 'pending'
+                          ? "bg-yellow-900/30 text-yellow-500 border border-yellow-700"
+                          : video.status === 'approved'
+                          ? "bg-green-900/30 text-green-500 border border-green-700"
+                          : "bg-red-900/30 text-red-500 border border-red-700"
+                      }`}
+                    >
+                      {video.status === 'pending' ? (
+                        <><Clock size={12} className="mr-1" />En proceso</>
+                      ) : video.status === 'approved' ? (
+                        <><Check size={12} className="mr-1" />Aprobado</>
+                      ) : (
+                        <><X size={12} className="mr-1" />Rechazado</>
+                      )}
+                    </button>
+                  </div>
+                  <div className="col-span-2 mt-2">
+                    <a
+                      href={video.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#7c3aed] flex items-center text-sm hover:underline"
+                    >
+                      Ver video <ExternalLink size={14} className="ml-1" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            ))
           ) : (
             <div className="bg-[#0c0c0c] border border-[#1c1c1c] rounded-md p-3 mb-3 text-center text-gray-400">
               No hay videos para mostrar
@@ -412,233 +492,6 @@ const ProfileBalance = () => {
       </>
     );
   };
-
-  // Renderizado de componentes
-  const renderVideoTableRow = (video: Video, index: number, showCampaign = true) => {
-    // Determinar estilos de estado
-    let statusStyle = ""
-    let statusText = ""
-    let statusIcon = null
-
-    // Asegurarse de que status sea un número para la comparación
-    const numStatus = typeof video.status === 'string' 
-      ? (video.status === 'approved' ? 1 : (video.status === 'rejected' ? 2 : 0)) 
-      : video.status;
-
-    // Estilos según el estado que viene directamente de la API
-    if (numStatus === 0) {
-      statusStyle = "bg-yellow-900/30 text-yellow-500 border border-yellow-700"
-      statusText = "En proceso"
-      statusIcon = <Clock size={16} className="mr-1" />
-    } else if (numStatus === 1) {
-      statusStyle = "bg-green-900/30 text-green-500 border border-green-700"
-      statusText = "Aprobado"
-      statusIcon = <Check size={16} className="mr-1" />
-    } else if (numStatus === 2) {
-      statusStyle = "bg-red-900/30 text-red-500 border border-red-700"
-      statusText = "Rechazado"
-      statusIcon = <X size={16} className="mr-1" />
-    }
-
-    // Verificar si el video cumple con el mínimo de vistas
-    const viewThreshold = video.views_threshold || 10000;
-    const hasSufficientViews = video.views >= viewThreshold;
-
-    // Determinar estado de verificación de la cuenta
-    const tikTokAccount = (video as any).tikTokAccount
-    const accountVerificationStatus = tikTokAccount ? tikTokAccount.verification_status : null
-
-    let accountStatusStyle = ""
-    let accountStatusText = ""
-    
-    if (accountVerificationStatus === "verified") {
-      accountStatusStyle = "bg-green-900/30 text-green-500 border border-green-700"
-      accountStatusText = "Verificada"
-    } else if (accountVerificationStatus === "rejected") {
-      accountStatusStyle = "bg-red-900/30 text-red-500 border border-red-700"
-      accountStatusText = "Rechazada"
-    } else if (accountVerificationStatus === "pending") {
-      accountStatusStyle = "bg-yellow-900/30 text-yellow-500 border border-yellow-700"
-      accountStatusText = "Pendiente"
-    }
-
-    // Obtener el nombre de usuario a mostrar
-    const creatorName = video.account_username || 'Sin nombre';
-
-    // Obtener el enlace del video
-    const videoLink = video.video_link || video.url || '#';
-
-    // Calcular el total a pagar
-    const totalToPay = typeof video.total_to_pay === 'number' 
-      ? video.total_to_pay 
-      : (video.payout ? parseFloat(video.payout) : 0);
-
-    return (
-      <tr key={`video-row-${index}`} className="border-b border-[#1c1c1c]">
-        <td className="px-4 py-3 text-white">{video.campaign || "Sin campaña"}</td>
-        <td className="px-4 py-3">
-          <div className="flex flex-col">
-            <span>{creatorName}</span>
-            {accountVerificationStatus && (
-              <span className={`mt-1 px-2 py-0.5 text-xs inline-block rounded ${accountStatusStyle}`}>
-                {accountStatusText}
-              </span>
-            )}
-          </div>
-        </td>
-        <td className="px-4 py-3">
-          <a
-            href={videoLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[#7c3aed] flex items-center hover:underline"
-          >
-            Ver video <ExternalLink size={16} className="ml-1" />
-          </a>
-        </td>
-        <td className="px-4 py-3 text-right">
-          <span className={video.views < viewThreshold ? "text-yellow-500" : ""}>
-            {video.views.toLocaleString()}
-          </span>
-          {video.views < viewThreshold && (
-            <span className="block text-xs text-yellow-500">Mínimo {viewThreshold.toLocaleString()} vistas</span>
-          )}
-        </td>
-        <td className="px-4 py-3 text-right">
-          <span className="font-medium">
-            {hasSufficientViews ? `$${totalToPay.toFixed(2)}` : "$0.00"}
-            {!hasSufficientViews && (
-              <span className="block text-yellow-500 text-xs">* Pendiente de vistas</span>
-            )}
-          </span>
-        </td>
-        <td className="px-4 py-3">
-          <button
-            onClick={numStatus === 2 ? () => handleVerificationToggle(video.id) : undefined}
-            className={`px-3 py-1 rounded text-sm flex items-center
-              ${statusStyle}
-            `}
-          >
-            {statusIcon} {statusText}
-          </button>
-        </td>
-      </tr>
-    )
-  }
-
-  const renderMobileVideoCard = (video: Video, index: number, showCampaign = true) => {
-    // Asegurarse de que status sea un número para la comparación
-    const numStatus = typeof video.status === 'string' 
-      ? (video.status === 'approved' ? 1 : (video.status === 'rejected' ? 2 : 0)) 
-      : video.status;
-
-    // Estilos según el estado que viene directamente de la API
-    let statusStyle = ""
-    let statusText = ""
-    let statusIcon = null
-
-    if (numStatus === 0) {
-      statusStyle = "bg-yellow-900/30 text-yellow-500 border border-yellow-700"
-      statusText = "En proceso"
-      statusIcon = <Clock size={12} className="mr-1" />
-    } else if (numStatus === 1) {
-      statusStyle = "bg-green-900/30 text-green-500 border border-green-700"
-      statusText = "Aprobado"
-      statusIcon = <Check size={12} className="mr-1" />
-    } else if (numStatus === 2) {
-      statusStyle = "bg-red-900/30 text-red-500 border border-red-700"
-      statusText = "Rechazado"
-      statusIcon = <X size={12} className="mr-1" />
-    }
-
-    const viewThreshold = video.views_threshold || 1000;
-    const hasSufficientViews = video.views >= viewThreshold;
-
-    // Determinar estado de verificación de la cuenta
-    const tikTokAccount = (video as any).tikTokAccount
-    const accountVerificationStatus = tikTokAccount ? tikTokAccount.verification_status : null
-
-    let accountStatusStyle = ""
-    let accountStatusText = ""
-    
-    if (accountVerificationStatus === "verified") {
-      accountStatusStyle = "bg-green-900/30 text-green-500 border border-green-700"
-      accountStatusText = "Cuenta verificada"
-    } else if (accountVerificationStatus === "rejected") {
-      accountStatusStyle = "bg-red-900/30 text-red-500 border border-red-700"
-      accountStatusText = "Cuenta rechazada"
-    } else if (accountVerificationStatus === "pending") {
-      accountStatusStyle = "bg-yellow-900/30 text-yellow-500 border border-yellow-700"
-      accountStatusText = "Cuenta pendiente"
-    }
-
-    // Obtener el nombre de usuario a mostrar
-    const creatorName = video.account_username || 'Sin nombre';
-
-    // Obtener el enlace del video
-    const videoLink = video.video_link || video.url || '#';
-
-    // Calcular el total a pagar
-    const totalToPay = typeof video.total_to_pay === 'number' 
-      ? video.total_to_pay 
-      : (video.payout ? parseFloat(video.payout) : 0);
-
-    return (
-      <div
-        key={`video-mobile-${index}`}
-        className="bg-[#0c0c0c] border border-[#1c1c1c] rounded-md p-3 mb-3"
-      >
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <p className="text-gray-500">Campaña:</p>
-            <p className="text-white">{video.campaign}</p>
-          </div>
-          <div>
-            <p className="text-gray-500">Creador:</p>
-            <p className="text-white">{creatorName}</p>
-            {accountVerificationStatus && (
-              <span className={`mt-1 px-2 py-0.5 text-xs inline-block rounded ${accountStatusStyle}`}>
-                {accountStatusText}
-              </span>
-            )}
-          </div>
-          <div>
-            <p className="text-gray-500">Vistas:</p>
-            <p className={`${!hasSufficientViews ? "text-yellow-500" : "text-white"}`}>
-              {video.views.toLocaleString()}
-              {!hasSufficientViews && <span className="block text-xs">Mínimo {viewThreshold.toLocaleString()} vistas</span>}
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-500">Total a pagar:</p>
-            <p className="text-white font-medium">
-              {hasSufficientViews ? `$${totalToPay.toFixed(2)}` : "$0.00"}
-              {!hasSufficientViews && <span className="block text-yellow-500 text-xs">Pendiente de vistas</span>}
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-500">Estado:</p>
-            <button
-              onClick={numStatus === 2 ? () => handleVerificationToggle(video.id) : undefined}
-              className={`px-2 py-1 rounded text-xs flex items-center ${statusStyle}`}
-            >
-              {statusIcon} {statusText}
-            </button>
-          </div>
-          <div className="col-span-2 mt-2">
-            <a
-              href={videoLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[#7c3aed] flex items-center text-sm hover:underline"
-            >
-              Ver video <ExternalLink size={14} className="ml-1" />
-            </a>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   // Componente de carga
   if (isLoading) {

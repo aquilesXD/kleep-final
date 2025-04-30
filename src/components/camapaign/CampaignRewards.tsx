@@ -196,7 +196,6 @@ export default function CampaignRewards() {
       }
 
       if (!response.ok) {
-        console.error(`Error al verificar campañas unidas: ${response.status}`);
         setIsJoined(false);
         setIsCheckingStatus(false);
         return;
@@ -214,7 +213,6 @@ export default function CampaignRewards() {
         setIsJoined(false);
       }
     } catch (error) {
-      console.error('Error al verificar estado de la campaña:', error);
       setIsJoined(false);
     } finally {
       setIsCheckingStatus(false);
@@ -295,7 +293,6 @@ export default function CampaignRewards() {
       // Si no hay cuentas verificadas, devolver null
       return null;
     } catch (error) {
-      console.error("Error al obtener ID de cuenta TikTok:", error);
       // En caso de error, también devolver null
       return null;
     }

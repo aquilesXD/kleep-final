@@ -38,7 +38,7 @@ export function CampaignSidebar({ activeItem = "overview" }: ProfileSidebarProps
           setCampaignData(data.campaign);
         }
       } catch (error) {
-        console.error('Error fetching campaign data:', error);
+        
       }
     };
 
@@ -73,7 +73,7 @@ export function CampaignSidebar({ activeItem = "overview" }: ProfileSidebarProps
           setAuthState({ isAuthenticated: true, isJoined: false, loading: false });
         }
       } catch (error) {
-        console.error('Error checking auth and joined status:', error);
+        
         setAuthState({ isAuthenticated: false, isJoined: false, loading: false });
       }
     };

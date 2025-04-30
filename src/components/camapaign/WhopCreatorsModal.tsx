@@ -84,7 +84,7 @@ const WhopCreatorsModal = ({ onClose, reward }: WhopCreatorsModalProps) => {
       }
 
       if (!response.ok) {
-        console.error(`Error al verificar campañas unidas: ${response.status}`);
+        
         setIsAlreadyJoined(false);
         setIsCheckingStatus(false);
         return;
@@ -101,11 +101,11 @@ const WhopCreatorsModal = ({ onClose, reward }: WhopCreatorsModalProps) => {
         setIsAlreadyJoined(isJoined);
       } else {
          // Manejar caso donde la respuesta no es un array o tiene formato inesperado
-         console.warn("Respuesta de campañas unidas inesperada:", data);
+         
          setIsAlreadyJoined(false);
       }
     } catch (error) {
-      console.error('Error al verificar estado de la campaña:', error);
+      
       setIsAlreadyJoined(false);
     } finally {
       setIsCheckingStatus(false);
@@ -209,7 +209,7 @@ const WhopCreatorsModal = ({ onClose, reward }: WhopCreatorsModalProps) => {
       throw new Error(`Error ${response.status}: ${errorText || 'Unknown error'}`);
 
     } catch (error: any) {
-      console.error('Error joining campaign:', error);
+      
       
       // Si el error es un error de red o parseo, o un error 401 que no fue manejado arriba
       if (error.message.includes('401') || error.message.includes('No autorizado')) {

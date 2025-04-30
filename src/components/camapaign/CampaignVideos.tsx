@@ -8,6 +8,7 @@ import { CampaignSidebar } from '../layout/CampainSidebar';
 // Interfaces para los datos
 interface VideoItem {
   id: number;
+  user_id: number;
   url: string;
   title: string; 
   description: string;
@@ -18,9 +19,12 @@ interface VideoItem {
   created_at: string;
   account_id: number;
   account_username: string;
-  payout: string; // Agregado para coincidir con la API
-  account: string; // Agregado para coincidir con la API
-  tiktok_username?: string; // Agregado para manejar el username de TikTok
+  payout: string;
+  account: string | null;
+  campaign: string;
+  campaign_id: number;
+  views_threshold: number;
+  price_per_view: string;
 }
 
 interface UnverifiedAccount {
@@ -95,8 +99,8 @@ export default function CampaignVideos() {
         'Accept': 'application/json'
       };
 
-      // 1. Obtener los videos de la campaña usando el campaignId dinámico
-      const videosResponse = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/my-videos`, {
+      // Obtener los videos de la campaña usando el nuevo endpoint
+      const videosResponse = await fetch(`https://contabl.net/kleep/api/videos`, {
         headers
       });
 
@@ -123,20 +127,27 @@ export default function CampaignVideos() {
       }
 
       if (data.success) {
-        const videos = data.videos.map(video => ({
-          id: video.id,
-          url: video.url,
-          views: video.views,
-          status: video.status,
-          payment_amount: parseFloat(video.payout),
-          created_at: video.created_at,
-          title: video.title || "Ver video",
-          description: video.description || "Descripción no disponible",
-          account_id: video.account_id || 0,
-          account_username: video.account || "@desconocido",
-          payout: video.payout,
-          account: video.account
-        }));
+        const videos = data.videos
+          .filter(video => video.campaign_id === parseInt(campaignId))
+          .map(video => ({
+            id: video.id,
+            user_id: video.user_id,
+            url: video.url,
+            views: video.views,
+            status: video.status,
+            payment_amount: parseFloat(video.payout),
+            created_at: video.created_at,
+            title: "Ver video",
+            description: `Campaña: ${video.campaign}`,
+            account_id: video.user_id,
+            account_username: video.account || "@Verificando...",
+            payout: video.payout,
+            account: video.account,
+            campaign: video.campaign,
+            campaign_id: video.campaign_id,
+            views_threshold: video.views_threshold,
+            price_per_view: video.price_per_view
+          }));
 
         setVideos(videos);
         

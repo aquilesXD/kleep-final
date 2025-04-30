@@ -106,7 +106,7 @@ export default function Home() {
               }
             }
           } catch (joinedErr) {
-            console.error('Error al obtener campañas unidas:', joinedErr);
+            
           }
         }
 
@@ -115,7 +115,7 @@ export default function Home() {
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`Error al cargar las campañas (${response.status}):`, errorText);
+          
           throw new Error(`Error al cargar las campañas (${response.status})`);
         }
 

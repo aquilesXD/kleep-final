@@ -45,8 +45,7 @@ const VerifyCode: React.FC = () => {
     const isRegistering = localStorage.getItem('isRegistering') === 'true';
     
     if (!storedEmail) {
-      // Eliminar console.error
-      // console.error('No email found in storage');
+      
       navigate('/signin');
       return;
     }

@@ -301,11 +301,11 @@ const ProfileConnectedAccounts = () => {
           }
         },
         (error) => {
-          console.error('Error al verificar estado de cuentas:', error);
+          
         }
       );
     } catch (error) {
-      console.error('Error al verificar estado de cuentas:', error);
+      
     } finally {
       setIsCheckingStatus(false);
       releaseLock(operationId);

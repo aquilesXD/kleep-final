@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
+import { useUserStore } from '../../stores/userStore';
 
 // Definir interfaces para el tipado estricto
 interface UserProfile {
@@ -28,7 +29,10 @@ interface ProfileErrors {
 // API endpoint constante
 const API_ENDPOINT = 'https://contabl.net/kleep/api/user';
 
-const ProfileGeneral: React.FC = () => {
+const ProfileGeneral = () => {
+  // Obtener la función de actualización del store
+  const { fetchUserData } = useUserStore();
+  
   // Estados principales utilizando el tipado
   const [profile, setProfile] = useState<UserProfile>({
     email: '',
@@ -92,12 +96,18 @@ const ProfileGeneral: React.FC = () => {
 
       if (response.data.success) {
         const userData = response.data.user;
+        const profileImage = userData.profile_image 
+          ? (userData.profile_image.startsWith('http') 
+              ? userData.profile_image 
+              : `https://contabl.net/kleep${userData.profile_image}`)
+          : '';
+        
         setProfile({
           email: userData.email || '',
           name: userData.name || '',
           username: userData.username || '',
           age: userData.age !== undefined ? userData.age : null,
-          profile_image: userData.profile_image || '',
+          profile_image: profileImage,
           biography: userData.biography || '',
           country: userData.country || '',
           phone: userData.phone || ''
@@ -188,40 +198,56 @@ const ProfileGeneral: React.FC = () => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       
-      // Verificar el tipo de archivo y tamaño
+      // Validar tipo de archivo
       const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
       if (!validTypes.includes(file.type)) {
-        setErrors(prev => ({
-          ...prev,
-          profilePicture: 'Formato no válido. Use JPG, PNG o GIF'
-        }));
+        toast.error('Formato no válido. Use JPG, PNG o GIF', {
+          duration: 3000,
+          position: 'top-center',
+        });
         return;
       }
       
+      // Validar tamaño
       if (file.size > 2 * 1024 * 1024) {
-        setErrors(prev => ({
-          ...prev,
-          profilePicture: 'La imagen no debe superar los 2MB'
-        }));
+        toast.error('La imagen no debe superar los 2MB', {
+          duration: 3000,
+          position: 'top-center',
+        });
         return;
       }
       
-      // Guardar el archivo para enviarlo al servidor
-      setNewProfilePicture(file);
+      // Crear preview de la imagen
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          setNewProfilePicture(file);
+          if (imagePreview) {
+            URL.revokeObjectURL(imagePreview);
+          }
+          const previewUrl = URL.createObjectURL(file);
+          setImagePreview(previewUrl);
+          
+          // Limpiar cualquier error previo
+          setErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors.profilePicture;
+            return newErrors;
+          });
+        };
+        
+        img.onerror = () => {
+          toast.error('El archivo seleccionado no es una imagen válida', {
+            duration: 3000,
+            position: 'top-center',
+          });
+        };
+        
+        img.src = reader.result as string;
+      };
       
-      // Crear URL para previsualización
-      if (imagePreview) {
-        URL.revokeObjectURL(imagePreview); // Liberar URL anterior
-      }
-      const previewUrl = URL.createObjectURL(file);
-      setImagePreview(previewUrl);
-      
-      // Limpiar errores si los hubiera
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors.profilePicture;
-        return newErrors;
-      });
+      reader.readAsDataURL(file);
     }
   };
   
@@ -247,10 +273,80 @@ const ProfileGeneral: React.FC = () => {
         throw new Error('No se encontró el token de autenticación');
       }
 
-      // Crear FormData para enviar los datos
+      // Si hay una nueva imagen, actualizarla primero
+      if (newProfilePicture) {
+        console.log('Iniciando actualización de imagen de perfil...');
+        const imageFormData = new FormData();
+        
+        // Asegurarse de que el nombre del campo sea exactamente 'profile_image'
+        imageFormData.append('profile_image', newProfilePicture);
+
+        try {
+          const imageResponse = await axios.post(
+            'https://contabl.net/kleep/api/user/profile-image',
+            imageFormData,
+            {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'multipart/form-data',
+                'Accept': 'application/json'
+              }
+            }
+          );
+
+          console.log('Respuesta del servidor:', imageResponse.data);
+
+          if (imageResponse.data.success) {
+            const newImageUrl = imageResponse.data.profile_image;
+            const finalImageUrl = newImageUrl.startsWith('http') 
+              ? newImageUrl 
+              : `https://contabl.net/kleep${newImageUrl.startsWith('/') ? '' : '/'}${newImageUrl}`;
+            
+            console.log('ProfileGeneral: URL final de la imagen:', finalImageUrl);
+            
+            // Actualizar el estado local
+            setProfile(prev => ({
+              ...prev,
+              profile_image: finalImageUrl
+            }));
+
+            // Actualizar el store global inmediatamente con la nueva URL
+            useUserStore.getState().updateUserData({
+              ...profile,
+              profile_image: finalImageUrl
+            });
+
+            // También actualizar todo el store para asegurarnos
+            await fetchUserData();
+
+            // Limpiar estados de la imagen
+            setNewProfilePicture(null);
+            if (imagePreview) {
+              URL.revokeObjectURL(imagePreview);
+              setImagePreview(null);
+            }
+
+            // Mostrar mensaje de éxito
+            toast.success('Imagen de perfil actualizada correctamente', {
+              duration: 3000,
+              position: 'top-center',
+              style: {
+                background: '#1a1a1a',
+                color: '#fff',
+                border: '1px solid #2a2a2a',
+              },
+            });
+          } else {
+            throw new Error(imageResponse.data.message || 'Error al actualizar la imagen');
+          }
+        } catch (imageError: any) {
+          console.error('Error al subir la imagen:', imageError);
+          return; // Detener la ejecución si falla la actualización de la imagen
+        }
+      }
+
+      // Crear FormData para enviar los datos del perfil
       const formData = new FormData();
-      
-      // Agregar campos básicos
       formData.append('name', profile.name);
       formData.append('username', profile.username);
       formData.append('biography', profile.biography);
@@ -262,11 +358,7 @@ const ProfileGeneral: React.FC = () => {
         formData.append('phone', profile.phone);
       }
 
-      // Agregar la imagen si hay una nueva
-      if (newProfilePicture) {
-        formData.append('profile_image', newProfilePicture);
-      }
-
+      console.log('Enviando datos del perfil...');
       const response = await axios.post(
         `${API_ENDPOINT}?_method=PUT`,
         formData,
@@ -278,6 +370,8 @@ const ProfileGeneral: React.FC = () => {
         }
       );
 
+      console.log('Respuesta del servidor (perfil):', response.data);
+
       if (response.data.success) {
         toast.success('¡Perfil actualizado exitosamente!', {
           duration: 3000,
@@ -288,26 +382,12 @@ const ProfileGeneral: React.FC = () => {
             border: '1px solid #2a2a2a',
           },
         });
-        
-        // Actualizar el estado con la nueva imagen si se envió una
-        if (newProfilePicture) {
-          setProfile(prev => ({
-            ...prev,
-            profile_image: response.data.user.profile_image
-          }));
-        }
-        
-        // Limpiar estados
-        setNewProfilePicture(null);
-        if (imagePreview) {
-          URL.revokeObjectURL(imagePreview);
-          setImagePreview(null);
-        }
       } else {
+        console.log('Error al actualizar el perfil:', response.data.message);
         setError(response.data.message || 'No se pudo actualizar el perfil');
       }
     } catch (error: any) {
-      console.error('Error al actualizar el perfil:', error);
+      console.error('Error completo al actualizar el perfil:', error);
       setError(error.response?.data?.message || 'Error al actualizar el perfil');
     } finally {
       setLoading(false);
@@ -347,10 +427,12 @@ const ProfileGeneral: React.FC = () => {
         />
       );
     } else {
-      // Mostrar iniciales si no hay imagen
+      // Mostrar placeholder cuando no hay imagen
       return (
-        <div className="text-3xl text-gray-500">
-          {profile.name ? profile.name.charAt(0).toUpperCase() : '?'}
+        <div className="w-full h-full flex flex-col items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
         </div>
       );
     }
@@ -580,8 +662,19 @@ const ProfileGeneral: React.FC = () => {
             <label className="block text-sm text-gray-400 mb-3">Foto de perfil</label>
             <div className="flex items-center">
               <div className="relative">
-                <div className="w-24 h-24 rounded-full overflow-hidden bg-[#1c1c1c] flex items-center justify-center">
+                <div 
+                  className="w-24 h-24 rounded-full overflow-hidden bg-[#1c1c1c] border-2 border-dashed border-gray-600 flex items-center justify-center hover:border-violet-500 transition-colors cursor-pointer group" 
+                  onClick={triggerFileInput}
+                >
                   {renderProfileImage()}
+                  {!profile.profile_image && !imagePreview && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1c1c1c] opacity-0 group-hover:opacity-100 transition-opacity">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.5v15m7.5-7.5h-15" />
+                      </svg>
+                      <span className="text-xs text-violet-500 mt-1">Añadir foto</span>
+                    </div>
+                  )}
                 </div>
                 <input
                   type="file"
