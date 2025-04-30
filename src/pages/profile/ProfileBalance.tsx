@@ -17,7 +17,6 @@ interface Video {
   url?: string
   campaign: string
   campaign_id?: number | null
-  creator?: string
   account?: string
   video_link?: string
   views: number
@@ -29,6 +28,7 @@ interface Video {
   total_to_pay?: number
   date?: string
   created_at?: string
+  account_username?: string
 }
 
 // Restauramos todos los campos del balance
@@ -233,8 +233,7 @@ const ProfileBalance = () => {
             url: item.url || '',
             campaign: item.campaign || "Campaña estándar",
             campaign_id: item.campaign_id || null,
-            creator: item.creator || item.account || '',
-            account: item.account || item.creator || '',
+            account_username: item.tiktok_username || item.account || item.creator || '',
             video_link: item.url || item.video_link || "#",
             views: typeof item.views === 'number' ? item.views : parseInt(item.views || '0'),
             views_threshold: item.views_threshold || 1000,
@@ -464,7 +463,7 @@ const ProfileBalance = () => {
     }
 
     // Obtener el nombre de usuario a mostrar
-    const creatorName = video.creator || video.account || '';
+    const creatorName = video.account_username || 'Sin nombre';
 
     // Obtener el enlace del video
     const videoLink = video.video_link || video.url || '#';
@@ -574,7 +573,7 @@ const ProfileBalance = () => {
     }
 
     // Obtener el nombre de usuario a mostrar
-    const creatorName = video.creator || video.account || '';
+    const creatorName = video.account_username || 'Sin nombre';
 
     // Obtener el enlace del video
     const videoLink = video.video_link || video.url || '#';

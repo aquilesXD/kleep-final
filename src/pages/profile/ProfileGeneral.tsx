@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { toast } from 'react-hot-toast';
 
 // Definir interfaces para el tipado estricto
 interface UserProfile {
@@ -278,7 +279,15 @@ const ProfileGeneral: React.FC = () => {
       );
 
       if (response.data.success) {
-        setSuccess('¡Perfil actualizado exitosamente!');
+        toast.success('¡Perfil actualizado exitosamente!', {
+          duration: 3000,
+          position: 'top-center',
+          style: {
+            background: '#1a1a1a',
+            color: '#fff',
+            border: '1px solid #2a2a2a',
+          },
+        });
         
         // Actualizar el estado con la nueva imagen si se envió una
         if (newProfilePicture) {
@@ -435,12 +444,6 @@ const ProfileGeneral: React.FC = () => {
           {error && (
             <div className="mb-4 p-3 bg-red-900/30 border border-red-800 rounded-md text-red-200 text-sm">
               {error}
-            </div>
-          )}
-          
-          {success && (
-            <div className="mb-4 p-3 bg-green-900/30 border border-green-800 rounded-md text-green-200 text-sm">
-              {success}
             </div>
           )}
 

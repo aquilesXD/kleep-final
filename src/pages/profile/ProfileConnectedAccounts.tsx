@@ -111,7 +111,9 @@ const ProfileConnectedAccounts = () => {
         (accountsData) => {
           const validatedAccounts = accountsData.map(account => ({
             ...account,
-            account_id: account.account_id || account.id || ''
+            account_id: account.account_id || account.id || '',
+            // Asegurarnos de que el username tenga el formato correcto
+            username: account.username.startsWith('@') ? account.username : `@${account.username}`
           }));
           setAccounts(validatedAccounts);
 
@@ -433,6 +435,7 @@ const ProfileConnectedAccounts = () => {
           message: isVerified ? 'Verificación exitosa' : 'No se encontró el código en el perfil'
         };
       } else {
+        // Asegurarnos de quitar el @ si existe para la verificación
         const tiktokUsername = selectedAccount.username.startsWith('@') 
           ? selectedAccount.username.substring(1) 
           : selectedAccount.username;
@@ -516,9 +519,14 @@ const ProfileConnectedAccounts = () => {
     try {
       await executeWithRetry(
         async () => {
+          // Asegurarnos de quitar el @ si existe para la verificación
+          const tiktokUsername = selectedAccount.username.startsWith('@') 
+            ? selectedAccount.username.substring(1) 
+            : selectedAccount.username;
+
           const result = await tiktokVerificationService.requestTikTokVerification({
             account_id: selectedAccount.account_id || '',
-            username: selectedAccount.username,
+            username: tiktokUsername,
             verification_code: verificationCode
           });
           return result;

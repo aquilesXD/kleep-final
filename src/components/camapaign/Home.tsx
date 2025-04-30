@@ -75,10 +75,10 @@ export default function Home() {
         setLoading(true);
         const token = getAuthToken();
         
-        // Endpoint para obtener campañas públicas o autenticadas
-        const endpoint = 'https://contabl.net/kleep/api/campaigns';
+        // Endpoint público para todas las campañas
+        const publicEndpoint = 'https://contabl.net/kleep/api/campaigns/public';
         
-        // Configurar headers base
+        // Headers básicos
         const headers: HeadersInit = {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -86,7 +86,7 @@ export default function Home() {
 
         let joinedCampaignIds = new Set<number>();
 
-        // Si el usuario está autenticado, primero obtener las campañas unidas
+        // Si el usuario está autenticado, obtener las campañas unidas
         if (token && isAuthenticated) {
           try {
             const joinedResponse = await fetch('https://contabl.net/kleep/api/campaigns/joined', {
@@ -109,24 +109,9 @@ export default function Home() {
             console.error('Error al obtener campañas unidas:', joinedErr);
           }
         }
-        
-        let response;
-        
-        // Solo intentar petición autenticada si hay token y el usuario está autenticado
-        if (token && isAuthenticated) {
-          headers['Authorization'] = `Bearer ${token}`;
-          response = await fetch(endpoint, { headers });
-          
-          // Si falla con autenticación, intentar sin ella
-          if (!response.ok) {
-            console.warn(`Error with authenticated request (${response.status}), trying public endpoint`);
-            delete headers['Authorization'];
-            response = await fetch(endpoint, { headers });
-          }
-        } else {
-          // Si no hay token o no está autenticado, hacer petición pública directamente
-          response = await fetch(endpoint, { headers });
-        }
+
+        // Obtener todas las campañas del endpoint público
+        const response = await fetch(publicEndpoint, { headers });
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -140,7 +125,7 @@ export default function Home() {
           throw new Error('Formato de respuesta inválido: no se encontraron campañas');
         }
 
-        // Marcar las campañas como unidas usando el Set de IDs obtenido anteriormente
+        // Marcar las campañas como unidas si el usuario está autenticado
         const allCampaigns = data.campaigns.map((campaign: Campaign) => ({
           ...campaign,
           is_joined: joinedCampaignIds.has(campaign.id),
@@ -162,7 +147,7 @@ export default function Home() {
     };
 
     fetchCampaigns();
-  }, [isAuthenticated]);
+  }, [isAuthenticated]); // Mantener la dependencia de isAuthenticated
 
   // Aplicar el ordenamiento inicial cuando se cargan las campañas
   useEffect(() => {
@@ -287,11 +272,6 @@ export default function Home() {
           ) : error ? (
             <div className="text-center py-10">
               <p className="text-red-500">Error: {error}</p>
-              <button 
-                onClick={() => window.location.reload()} 
-                className="mt-4 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-md">
-                Reintentar
-              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">

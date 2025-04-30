@@ -308,6 +308,12 @@ export default function CampaignRewards() {
       return;
     }
 
+    // Validar que el enlace sea de TikTok
+    if (!videoLink.includes('tiktok.com')) {
+      toast.error("Por favor ingrese un enlace válido de TikTok.");
+      return;
+    }
+
     try {
       setSubmitting(true);
 
@@ -320,24 +326,27 @@ export default function CampaignRewards() {
         throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
       }
 
-      // Obtener el ID de cuenta de TikTok
-      const accountId = await fetchTikTokAccountId();
+      // Obtener cuentas de TikTok verificadas
+      const accounts = await tiktokVerificationService.fetchTikTokAccountsFromNewApi();
 
-      // Verificar si se encontró una cuenta válida
-      if (accountId === null) {
-        throw new Error('No se encontró una cuenta de TikTok verificada. Por favor, verifica una cuenta en tu perfil antes de enviar videos.');
+      // Verificar si hay alguna cuenta asociada
+      if (!accounts || accounts.length === 0) {
+        throw new Error('No tienes ninguna cuenta de TikTok asociada. Por favor, agrega una cuenta en tu perfil.');
       }
 
-      // Preparar los datos para enviar - incluyendo todos los campos requeridos
+      // Seleccionar la primera cuenta verificada
+      const account = accounts[0];
+
+      // Preparar datos del video
       const videoData = {
+        campaign_id: Number(campaignId),
         url: videoLink,
-        title: videoTitle,
-        description: videoDescription,
-        tiktok_account_id: accountId
+        tiktok_account_id: Number(account.id),
+        tiktok_username: account.username
       };
 
-      // Hacer la petición para enviar el video
-      const response = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/submit-video`, {
+      // Enviar solicitud a la API
+      const response = await fetch('https://contabl.net/kleep/api/videos/link', {
         method: 'POST',
         headers: {
           'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
@@ -347,50 +356,21 @@ export default function CampaignRewards() {
         body: JSON.stringify(videoData)
       });
 
-      // Si el error es 422, mostrar información detallada para depuración
-      if (response.status === 422) {
-        const errorData = await response.json();
-        
-        // Mostrar mensaje más detallado para ayudar al diagnóstico
-        let errorMessage = "Los datos enviados no son válidos.";
-        if (errorData && errorData.errors) {
-          // Extraer mensajes de error específicos
-          const errorDetails = Object.entries(errorData.errors)
-            .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
-            .join('; ');
-          errorMessage += ` ${errorDetails}`;
-        }
-        
-        throw new Error(`Error 422: ${errorMessage}`);
-      }
-
-      // Si el error es 403 (Prohibido), mostrar un mensaje claro
-      if (response.status === 403) {
-        throw new Error('Error 403: No tienes permiso para realizar esta acción.');
-      }
+      const data = await response.json();
 
       if (!response.ok) {
-        const responseText = await response.text();
-        throw new Error(`Error al enviar el video (${response.status}): ${responseText}`);
+        if (response.status === 409) {
+          throw new Error('Este video ya ha sido registrado en otra campaña. Por favor, utiliza un video diferente.');
+        }
+        throw new Error(data.message || `Error al registrar el video (${response.status})`);
       }
 
-      const responseText = await response.text();
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        data = { success: true }; // Asumimos éxito si la respuesta es exitosa pero no es JSON
-      }
-
-      if (data.success) {
-        // Mostrar mensaje de éxito con detalles si están disponibles
-        const message = data.message || "¡Video enviado correctamente!";
-        toast.success(message);
-        
-        // Limpiar el formulario
-        setVideoLink("");
+      // Verificar la estructura de la respuesta exitosa
+      if (data.success && data.video) {
+        toast.success(data.message || "¡Video registrado correctamente!");
+        setVideoLink(""); // Limpiar el campo después del éxito
       } else {
-        throw new Error(data.message || "Error al enviar el video");
+        throw new Error("Error: Respuesta del servidor no válida");
       }
 
     } catch (err) {

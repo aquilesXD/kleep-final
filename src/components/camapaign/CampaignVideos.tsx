@@ -20,6 +20,7 @@ interface VideoItem {
   account_username: string;
   payout: string; // Agregado para coincidir con la API
   account: string; // Agregado para coincidir con la API
+  tiktok_username?: string; // Agregado para manejar el username de TikTok
 }
 
 interface UnverifiedAccount {
@@ -94,8 +95,8 @@ export default function CampaignVideos() {
         'Accept': 'application/json'
       };
 
-      // 1. Obtener los videos de la campaña
-      const videosResponse = await fetch(`https://contabl.net/kleep/api/campaigns/1/my-videos`, {
+      // 1. Obtener los videos de la campaña usando el campaignId dinámico
+      const videosResponse = await fetch(`https://contabl.net/kleep/api/campaigns/${campaignId}/my-videos`, {
         headers
       });
 
@@ -154,11 +155,11 @@ export default function CampaignVideos() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [campaignId]);
 
   useEffect(() => {
     fetchVideos();
-  }, [fetchVideos]);
+  }, [fetchVideos, campaignId]);
 
   // Función para formatear el nombre de usuario
   const formatUsername = (username: string | undefined | null): string => {

@@ -5,13 +5,12 @@ import '../../components/ui/Form.css';
 import { toast } from 'react-hot-toast';
 
 // API endpoint for user creation
-const API_USER_ENDPOINT = 'https://contabl.net/kleep/api/user';
+const API_USER_ENDPOINT = 'https://contabl.net/kleep/api/auth/register';
 
 const SignUp: React.FC = () => {
   const [email, setEmail] = useState<string>('');
   const [name, setName] = useState<string>('');
   const [username, setUsername] = useState<string>('');
-  const [age, setAge] = useState<number | ''>('');
   const [country, setCountry] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
   const [isValidForm, setIsValidForm] = useState<boolean>(false);
@@ -95,11 +94,10 @@ const SignUp: React.FC = () => {
       email.trim().length > 0 &&
       name.trim().length > 0 && 
       username.trim().length > 0 &&
-      (typeof age === 'number' || age.toString().trim() !== '') &&
       country.trim().length > 0 &&
       phone.replace(/\D/g, '').length > 0
     );
-  }, [email, name, username, age, country, phone]);
+  }, [email, name, username, country, phone]);
 
   // Clases para los inputs
   const getInputClassName = () => {
@@ -119,12 +117,6 @@ const SignUp: React.FC = () => {
 
   const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUsername(e.target.value);
-    setError(null);
-  };
-
-  const handleAgeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setAge(value === '' ? '' : parseInt(value, 10));
     setError(null);
   };
 
@@ -153,55 +145,52 @@ const SignUp: React.FC = () => {
     setError(null);
 
     try {
-      // Preparar datos del formulario
-      const formData = new FormData();
-      formData.append('email', email.trim());
-      formData.append('name', name.trim());
-      formData.append('username', username.trim());
-      
-      if (typeof age === 'number' && !isNaN(age)) {
-        formData.append('age', age.toString());
-      } else if (typeof age === 'string' && age.trim() !== '') {
-        formData.append('age', age.trim());
-      }
-      
-      formData.append('country', country.trim());
-      formData.append('phone', phone.trim());
+      // Preparar datos del usuario con la nueva estructura
+      const userData = {
+        email: email.trim(),
+        name: name.trim(),
+        username: username.trim(),
+        country: country.trim(),
+        phone: phone.trim()
+      };
 
-      // Enviar solicitud
+      // Enviar solicitud con la nueva estructura
       const response = await fetch(API_USER_ENDPOINT, {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(userData)
       });
 
-      // Procesar respuesta
-      const responseText = await response.text();
-      let responseData;
-      
-      try {
-        responseData = responseText ? JSON.parse(responseText) : {};
-      } catch (e) {
-        console.error('Error al parsear la respuesta como JSON:', e);
-        responseData = { message: responseText || `Error en el servidor: ${response.status}` };
-      }
+      const responseData = await response.json();
 
       if (!response.ok) {
         throw new Error(responseData.message || `Error en el servidor: ${response.status}`);
       }
 
-      // Manejo de respuesta exitosa
-      if (responseData.token) {
-        localStorage.setItem('token', responseData.token);
-        localStorage.setItem('userEmail', email);
-        localStorage.setItem('userId', responseData.id || responseData.user_id || '');
-        localStorage.setItem('isAuthenticated', 'true');
+      // Verificar si la respuesta fue exitosa
+      if (responseData.success) {
+        // Guardar datos relevantes en localStorage
+        localStorage.setItem('userId', responseData.user_id.toString());
+        localStorage.setItem('userEmail', responseData.user.email);
+        localStorage.setItem('verification_expires_at', responseData.expires_at);
+        
+        // Mostrar mensaje de éxito indicando que revise su correo
+        toast.success('Usuario creado correctamente. Por favor revisa tu correo electrónico para obtener el código de verificación.');
+        
+        // Redirigir a la página de verificación de código
+        navigate('/verify-code', { 
+          state: { 
+            email: responseData.user.email,
+            userId: responseData.user_id,
+            expiresAt: responseData.expires_at
+          }
+        });
+      } else {
+        throw new Error(responseData.message || 'Error al crear el usuario');
       }
-
-      // Notificar éxito
-      toast.success('Usuario creado correctamente');
-      
-      // Redirigir al login
-      navigate('/signin');
     } catch (error: any) {
       console.error('Error:', error);
       setError(error.message || 'Error al crear el usuario');
@@ -269,19 +258,6 @@ const SignUp: React.FC = () => {
               onChange={handleUsernameChange}
               disabled={isLoading}
               autoComplete="username"
-              required
-            />
-          </div>
-
-          <div className="mb-4">
-            <input
-              className={getInputClassName()}
-              id="age"
-              placeholder="Edad"
-              type="number"
-              value={age}
-              onChange={handleAgeChange}
-              disabled={isLoading}
               required
             />
           </div>

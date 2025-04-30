@@ -125,11 +125,7 @@ const WhopCreatorsModal = ({ onClose, reward }: WhopCreatorsModalProps) => {
   const handleViewDetails = () => {
     onClose(); // Cierra el modal
     const targetPath = `/campaign/${reward.id}`;
-    console.log("Intentando navegar a:", targetPath);
-    // Navega a la ruta correcta usando el ID de la recompensa
-    if (targetPath) {
-      navigate(targetPath);
-    }
+    navigate(targetPath);
   };
   
   // *** MODIFICACIÓN AQUÍ ***
@@ -137,11 +133,7 @@ const WhopCreatorsModal = ({ onClose, reward }: WhopCreatorsModalProps) => {
   const handleViewCampaign = () => {
     onClose(); // Cierra el modal
     const targetPath = `/campaign/${reward.id}`;
-    console.log("Intentando navegar a:", targetPath);
-    // Navega a la ruta correcta usando el ID de la recompensa
-    if (targetPath) {
-      navigate(targetPath);
-    }
+    navigate(targetPath);
   };
 
   // Function to handle 401 unauthorized errors
@@ -197,7 +189,8 @@ const WhopCreatorsModal = ({ onClose, reward }: WhopCreatorsModalProps) => {
             onClose();
             // Redirigir al dashboard de campañas unidas o a la página de detalles de ESTA campaña
             // navigate('/dashboard/campaigns'); // o si quieres ir a la página de detalles de la campaña unida:
-            navigate(`/campaigns/${reward.id}`); // <-- Quizás quieras ir aquí después de unirte?
+            const targetPath = `/campaigns/${reward.id}/rewards`;
+            navigate(targetPath);
             return; // Salir de la función después del éxito
          } else {
              // Si response.ok pero success es false
