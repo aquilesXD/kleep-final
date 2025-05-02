@@ -20,8 +20,8 @@ export function Testimonial({ name, avatar, rating, text, date }: TestimonialPro
           </div>
         </div>
       </div>
-      <div className="p-4 relative h-[calc(100%-60px)]">
-        <p className="text-base text-white mb-2">{text}</p>
+      <div className="p-4 relative mb-3 h-[calc(100%-60px)]">
+        <p className="text-base text-white mb-1">{text}</p>
         <p className="text-xs text-gray-400 absolute bottom-4 left-4 pt-2">{date}</p>
       </div>
     </div>

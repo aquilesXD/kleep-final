@@ -68,7 +68,8 @@ export default function Campaign() {
     new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 2
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 6
     }).format(typeof value === 'string' ? parseFloat(value) : value);
 
   useEffect(() => {
@@ -361,7 +362,7 @@ export default function Campaign() {
                           <li className="p-4 flex items-start gap-3 text-gray-400">
                             <CheckCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-0.5" />
                             <span>
-                              Precio por vista: {campaignData.price_per_view}
+                             Precio por vista: {formatUSD(campaignData.price_per_view)}
                             </span>
                           </li>
                           <li className="p-4 flex items-start gap-3 text-gray-400">
