@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback } from 'react';
 import { ExternalLink, Check, Clock, AlertTriangle, X } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import axios from "axios"
@@ -8,6 +8,7 @@ import axios from "axios"
 // API endpoints
 const API_BASE_URL = "https://contabl.net/kleep/api"
 const VIDEOS_ENDPOINT = `${API_BASE_URL}/videos`
+const BALANCE_ENDPOINT = `${API_BASE_URL}/balance`
 const TIKTOK_UNVERIFIED_ACCOUNTS_ENDPOINT = `${API_BASE_URL}/tiktok-accounts/unverified`
 
 // Tipos simplificados
@@ -97,6 +98,7 @@ const ProfileBalance = () => {
   const [email, setEmail] = useState<string | null>(null)
   const [videos, setVideos] = useState<Video[]>([])
   const [deposits, setDeposits] = useState<Deposit[]>([])
+  const [userId, setUserId] = useState<number | null>(null); 
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [balance, setBalance] = useState<BalanceData>({
     total: 0,
@@ -104,6 +106,28 @@ const ProfileBalance = () => {
     approved_videos: 0,
     rejected_videos: 0
   })
+
+  const fetchUserId = async (): Promise<number | null> => {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+  
+    try {
+      const res = await fetch('https://contabl.net/kleep/api/user', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        }
+      });
+  
+      if (!res.ok) return null;
+  
+      const data = await res.json();
+      return data.user?.id || null;
+    } catch (e) {
+      return null;
+    }
+  };
+  
   
   // Estados de UI
   const [isLoading, setIsLoading] = useState(true)
@@ -122,19 +146,20 @@ const ProfileBalance = () => {
 
   // Cargar datos al iniciar
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem("isAuthenticated")
-    const userEmail = localStorage.getItem("userEmail")
-    
-    if (!isAuthenticated || !userEmail) {
-      navigate("/signin")
-      return
-    }
-
-    setEmail(userEmail)
-    fetchBalanceData()
-    fetchUnverifiedTikTokAccounts() // Cargar cuentas no verificadas
-  }, [navigate])
-
+    const init = async () => {
+      const id = await fetchUserId();
+      if (id) {
+        setUserId(id);
+        setEmail(localStorage.getItem("userEmail"));
+        fetchBalanceData(id); // Pasamos el userId correcto
+        fetchUnverifiedTikTokAccounts();
+      } else {
+        navigate("/signin");
+      }
+    };
+  
+    init();
+  }, [navigate]);
   // Función para obtener cuentas no verificadas de TikTok
   const fetchUnverifiedTikTokAccounts = useCallback(async () => {
     setLoadingUnverifiedAccounts(true);
@@ -177,18 +202,45 @@ const ProfileBalance = () => {
   }, []);
 
   // Función para obtener campañas y videos del usuario
-  const fetchBalanceData = async () => {
+  const fetchBalanceData = async (uid: number) => {
     setIsLoading(true)
     setError(null)
 
     try {
       const token = localStorage.getItem('token')
+      const userId = localStorage.getItem('userId')
+      
       if (!token) {
         throw new Error('No se encontró el token de autenticación')
       }
 
-      // Obtener videos del usuario
-      const videosResponse = await fetch(VIDEOS_ENDPOINT, {
+      // Obtener el balance del servidor
+      const balanceResponse = await fetch(BALANCE_ENDPOINT, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!balanceResponse.ok) {
+        throw new Error(`Error al obtener datos del balance: ${balanceResponse.status}`)
+      }
+
+      const balanceData = await balanceResponse.json()
+
+      if (balanceData.success) {
+        setBalance({
+          total: balanceData.balance.total,
+          pending_videos: balanceData.balance.pending_videos,
+          approved_videos: balanceData.balance.approved_videos,
+          rejected_videos: balanceData.balance.rejected_videos
+        })
+      }
+
+      // Obtener videos del usuario con user_id
+      const userVideosEndpoint = `${VIDEOS_ENDPOINT}?user_id=${uid}`
+      const videosResponse = await fetch(userVideosEndpoint, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -214,13 +266,15 @@ const ProfileBalance = () => {
       let videosList = [];
       if (videosData.videos && Array.isArray(videosData.videos)) {
         videosList = videosData.videos
-          .filter((item: any) => {
-            // Si estamos en una campaña específica, filtrar por campaign_id
-            if (currentCampaignId) {
-              return item.campaign_id === parseInt(currentCampaignId);
-            }
-            return true; // Si no hay campaign_id en la URL, mostrar todos los videos
-          })
+        .filter((item: any) => {
+          const matchesCampaign = currentCampaignId
+            ? item.campaign_id === parseInt(currentCampaignId)
+            : true;
+      
+          const matchesUser = item.user_id === uid;
+      
+          return matchesCampaign && matchesUser;
+        })
           .map((item: any) => ({
             id: item.id,
             title: "Ver video",
@@ -240,31 +294,8 @@ const ProfileBalance = () => {
 
       setVideos(videosList);
 
-      // Calcular totales para el balance
-      let pendingVideos = 0;
-      let approvedVideos = 0;
-      let rejectedVideos = 0;
-      let totalBalance = 0;
-
-      // Contar videos por estado y calcular balance total
-      videosList.forEach((video: Video) => {
-        // Contar videos por estado
-        if (video.status === 'pending') pendingVideos++;
-        else if (video.status === 'approved') approvedVideos++;
-        else if (video.status === 'rejected') rejectedVideos++;
-
-        // Sumar al balance total
-        totalBalance += calculateVideoPayment(video);
-      });
-
-      // Actualizar el balance
-      setBalance({
-        total: totalBalance,
-        pending_videos: pendingVideos,
-        approved_videos: approvedVideos,
-        rejected_videos: rejectedVideos
-      });
-
+      
+      
     } catch (error: any) {
       setError(`No se pudieron cargar los datos: ${error.message}`)
     } finally {
@@ -276,9 +307,10 @@ const ProfileBalance = () => {
   useEffect(() => {
     // Recargar datos cuando cambie la URL (cambio de campaña)
     const currentCampaignId = window.location.pathname.match(/\/campaigns\/(\d+)/)?.[1];
-    if (currentCampaignId) {
-      fetchBalanceData();
-    }
+if (currentCampaignId && userId !== null) {
+  fetchBalanceData(userId);
+}
+
   }, [window.location.pathname]);
 
   // Manejadores de eventos
@@ -317,7 +349,7 @@ const ProfileBalance = () => {
           <h3 className="font-medium mb-2">Error al cargar los datos</h3>
           <p className="mb-3">{error}</p>
           <button
-            onClick={fetchBalanceData}
+            onClick={() => userId && fetchBalanceData(userId)}
             className="bg-red-700 hover:bg-red-600 text-white rounded px-3 py-1 text-sm"
           >
             Intentar de nuevo
@@ -418,40 +450,40 @@ const ProfileBalance = () => {
             videos.map((video, i) => (
               <div
                 key={`video-mobile-${i}`}
-                className="bg-[#0c0c0c] border border-[#1c1c1c] rounded-md p-3 mb-3"
-              >
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <p className="text-gray-500">Campaña:</p>
+        className="bg-[#0c0c0c] border border-[#1c1c1c] rounded-md p-3 mb-3"
+      >
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div>
+            <p className="text-gray-500">Campaña:</p>
                     <p className="text-white">{video.campaign || "Sin campaña"}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Creador:</p>
+          </div>
+          <div>
+            <p className="text-gray-500">Creador:</p>
                     <p className="text-white">{video.account_username || 'Sin nombre'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Vistas:</p>
+          </div>
+          <div>
+            <p className="text-gray-500">Vistas:</p>
                     <p className={`${video.views < (video.views_threshold || 1000) ? "text-yellow-500" : "text-white"}`}>
-                      {video.views.toLocaleString()}
+              {video.views.toLocaleString()}
                       {video.views < (video.views_threshold || 1000) && (
                         <span className="block text-xs">
                           Mínimo {(video.views_threshold || 1000).toLocaleString()} vistas
                         </span>
                       )}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Total a pagar:</p>
-                    <p className="text-white font-medium">
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-500">Total a pagar:</p>
+            <p className="text-white font-medium">
                       ${calculateVideoPayment(video).toFixed(2)}
                       {video.views < (video.views_threshold || 1000) && (
                         <span className="block text-yellow-500 text-xs">Pendiente de vistas</span>
                       )}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Estado:</p>
-                    <button
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-500">Estado:</p>
+            <button
                       onClick={video.status === 'rejected' ? () => handleVerificationToggle(video.id) : undefined}
                       className={`px-2 py-1 rounded text-xs flex items-center ${
                         video.status === 'pending'
@@ -468,20 +500,20 @@ const ProfileBalance = () => {
                       ) : (
                         <><X size={12} className="mr-1" />Rechazado</>
                       )}
-                    </button>
-                  </div>
-                  <div className="col-span-2 mt-2">
-                    <a
+            </button>
+          </div>
+          <div className="col-span-2 mt-2">
+            <a
                       href={video.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#7c3aed] flex items-center text-sm hover:underline"
-                    >
-                      Ver video <ExternalLink size={14} className="ml-1" />
-                    </a>
-                  </div>
-                </div>
-              </div>
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#7c3aed] flex items-center text-sm hover:underline"
+            >
+              Ver video <ExternalLink size={14} className="ml-1" />
+            </a>
+          </div>
+        </div>
+      </div>
             ))
           ) : (
             <div className="bg-[#0c0c0c] border border-[#1c1c1c] rounded-md p-3 mb-3 text-center text-gray-400">
@@ -512,7 +544,7 @@ const ProfileBalance = () => {
         <div className="bg-red-900/30 border border-red-700 rounded mb-6 p-3 text-red-400">
           <p>{error}</p>
           <button
-            onClick={fetchBalanceData}
+            onClick={() => userId && fetchBalanceData(userId)}
             className="mt-2 bg-red-700 hover:bg-red-600 text-white rounded px-3 py-1 text-sm"
           >
             Intentar de nuevo

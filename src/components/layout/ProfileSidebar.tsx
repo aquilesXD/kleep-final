@@ -13,7 +13,7 @@ const ProfileSidebar: React.FC<ProfileSidebarProps> = ({ mobile, onCloseMobileMe
   const location = useLocation();
   const navigate = useNavigate();
   const { userData, isLoading, fetchUserData } = useUserStore();
-
+  
   // Obtener el nombre del usuario al cargar el componente
   useEffect(() => {
     fetchUserData();

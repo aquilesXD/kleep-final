@@ -13,6 +13,7 @@ const SignUp: React.FC = () => {
   const [username, setUsername] = useState<string>('');
   const [country, setCountry] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
+  const [age, setAge] = useState<string>('');
   const [isValidForm, setIsValidForm] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,9 +96,11 @@ const SignUp: React.FC = () => {
       name.trim().length > 0 && 
       username.trim().length > 0 &&
       country.trim().length > 0 &&
-      phone.replace(/\D/g, '').length > 0
+      phone.replace(/\D/g, '').length > 0 &&
+      age.trim().length > 0 &&
+      parseInt(age) >= 18
     );
-  }, [email, name, username, country, phone]);
+  }, [email, name, username, country, phone, age]);
 
   // Clases para los inputs
   const getInputClassName = () => {
@@ -120,7 +123,7 @@ const SignUp: React.FC = () => {
     setError(null);
   };
 
-  const handleCountryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setCountry(e.target.value);
     setError(null);
   };
@@ -132,12 +135,24 @@ const SignUp: React.FC = () => {
     setError(null);
   };
 
+  const handleAgeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Solo permitir números y eliminar cualquier otro carácter
+    const value = e.target.value.replace(/\D/g, '');
+    setAge(value);
+    setError(null);
+  };
+
   // Enviar datos al servidor
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!isValidForm) {
       setError('Por favor complete todos los campos requeridos');
+      return;
+    }
+
+    if (parseInt(age) < 18) {
+      setError('Debes tener al menos 18 años para registrarte');
       return;
     }
 
@@ -151,7 +166,8 @@ const SignUp: React.FC = () => {
         name: name.trim(),
         username: username.trim(),
         country: country.trim(),
-        phone: phone.trim()
+        phone: phone.trim(),
+        age: parseInt(age.trim())
       };
 
       // Enviar solicitud con la nueva estructura
@@ -262,23 +278,53 @@ const SignUp: React.FC = () => {
           </div>
 
           <div className="mb-4">
-            <input
-              className={getInputClassName()}
+            <select
+              className={`${getInputClassName()} appearance-none w-full py-3 px-4 text-base`}
               id="country"
-              placeholder="País"
-              type="text"
               value={country}
               onChange={handleCountryChange}
               disabled={isLoading}
               required
-            />
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                backgroundPosition: `right 0.5rem center`,
+                backgroundRepeat: `no-repeat`,
+                backgroundSize: `1.5em 1.5em`,
+                paddingRight: `2.5rem`
+              }}
+            >
+              <option value="">Selecciona un país</option>
+              <option value="Argentina">Argentina</option>
+              <option value="Bolivia">Bolivia</option>
+              <option value="Brasil">Brasil</option>
+              <option value="Chile">Chile</option>
+              <option value="Colombia">Colombia</option>
+              <option value="Costa Rica">Costa Rica</option>
+              <option value="Cuba">Cuba</option>
+              <option value="Ecuador">Ecuador</option>
+              <option value="El Salvador">El Salvador</option>
+              <option value="Guatemala">Guatemala</option>
+              <option value="Honduras">Honduras</option>
+              <option value="México">México</option>
+              <option value="Nicaragua">Nicaragua</option>
+              <option value="Panamá">Panamá</option>
+              <option value="Paraguay">Paraguay</option>
+              <option value="Perú">Perú</option>
+              <option value="Puerto Rico">Puerto Rico</option>
+              <option value="República Dominicana">República Dominicana</option>
+              <option value="Uruguay">Uruguay</option>
+              <option value="Venezuela">Venezuela</option>
+              <option value="Estados Unidos">Estados Unidos</option>
+              <option value="Canadá">Canadá</option>
+              <option value="España">España</option>
+            </select>
           </div>
 
           <div className="mb-4">
             <input
               className={getInputClassName()}
               id="phone"
-              placeholder="Teléfono (solo números)"
+              placeholder="Teléfono"
               type="number"
               value={phone}
               onChange={handlePhoneChange}
@@ -298,6 +344,35 @@ const SignUp: React.FC = () => {
               pattern="[0-9]*"
               inputMode="numeric"
               maxLength={15}
+              required
+            />
+          </div>
+
+          <div className="mb-4">
+            <input
+              className={getInputClassName()}
+              id="age"
+              placeholder="Edad"
+              type="number"
+              value={age}
+              onChange={handleAgeChange}
+              onInput={(e) => {
+                // Forzar que solo se puedan ingresar números
+                const input = e.target as HTMLInputElement;
+                input.value = input.value.replace(/\D/g, '');
+              }}
+              onPaste={(e) => {
+                // Prevenir pegar texto no numérico
+                const pastedText = e.clipboardData.getData('text');
+                if (!/^\d+$/.test(pastedText)) {
+                  e.preventDefault();
+                }
+              }}
+              disabled={isLoading}
+              pattern="[0-9]*"
+              inputMode="numeric"
+              min="18"
+              max="120"
               required
             />
           </div>

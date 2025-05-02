@@ -1,16 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Sidebar from '../layout/Sidebar';
-
 import { AlertTriangle, ExternalLink, Clock, Check, X } from 'lucide-react';
 import { CampaignSidebar } from '../layout/CampainSidebar';
 
-// Interfaces para los datos
+// Interfaces
 interface VideoItem {
   id: number;
   user_id: number;
   url: string;
-  title: string; 
+  title: string;
   description: string;
   status: 'pending' | 'approved' | 'rejected';
   status_note?: string;
@@ -45,120 +44,112 @@ interface UnverifiedAccountsResponse {
   accounts: UnverifiedAccount[];
 }
 
-// Get auth token from localStorage or sessionStorage
+interface UserResponse {
+  success: boolean;
+  user: { id: number };
+}
+
+// Token auth helper
 const getAuthToken = (): string => {
-  return localStorage.getItem("authToken") || 
-         localStorage.getItem("token") || 
-         sessionStorage.getItem("authToken") || 
-         sessionStorage.getItem("token") || 
-         ""; // Devuelve cadena vacía si no encuentra token
+  return localStorage.getItem("authToken") ||
+         localStorage.getItem("token") ||
+         sessionStorage.getItem("authToken") ||
+         sessionStorage.getItem("token") || "";
 };
 
 export default function CampaignVideos() {
   const { campaignId = "1" } = useParams<{ campaignId: string }>();
   const navigate = useNavigate();
+
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [unverifiedAccounts, setUnverifiedAccounts] = useState<UnverifiedAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthError, setIsAuthError] = useState(false);
+  const [userId, setUserId] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState<boolean>(false);
 
-  // Detectar dispositivo móvil
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    
-    // Comprobar al inicio
     checkMobile();
-    
-    // Comprobar al cambiar el tamaño de la ventana
     window.addEventListener('resize', checkMobile);
-    
-    // Limpiar event listener
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Obtener los videos y las cuentas no verificadas
-  const fetchVideos = useCallback(async () => {
+  const fetchUserId = async (): Promise<number | null> => {
     try {
-      setLoading(true);
-      setIsAuthError(false);
-
       const token = getAuthToken();
-      if (!token) {
-        setIsAuthError(true);
-        throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
-      }
+      if (!token) return null;
 
-      // Configuración de headers para las peticiones
       const headers = {
         'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       };
 
-      // Obtener los videos de la campaña usando el nuevo endpoint
-      const videosResponse = await fetch(`https://contabl.net/kleep/api/videos`, {
-        headers
-      });
+      const response = await fetch('https://contabl.net/kleep/api/user', { headers });
+      if (!response.ok) return null;
 
-      if (!videosResponse.ok) {
-        throw new Error(`Error al cargar los videos (${videosResponse.status})`);
+      const data: UserResponse = await response.json();
+      return data.user?.id || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const fetchVideos = useCallback(async () => {
+    try {
+      setLoading(true);
+      setIsAuthError(false);
+
+      const token = getAuthToken();
+      if (!token || userId === null) {
+        setIsAuthError(true);
+        throw new Error('Token o ID de usuario no encontrado. Por favor, inicia sesión.');
       }
+
+      const headers = {
+        'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
+
+      const videosResponse = await fetch(`https://contabl.net/kleep/api/videos`, { headers });
+      if (!videosResponse.ok) throw new Error(`Error al cargar videos (${videosResponse.status})`);
 
       const data: ApiResponse = await videosResponse.json();
 
-      // 2. Obtener las cuentas no verificadas
-      const unverifiedAccountsResponse = await fetch('https://contabl.net/kleep/api/tiktok-accounts/unverified', {
-        headers
-      });
-
-      if (!unverifiedAccountsResponse.ok) {
-        // Continuamos incluso si hay error, para al menos mostrar los videos
-      } else {
+      const unverifiedAccountsResponse = await fetch('https://contabl.net/kleep/api/tiktok-accounts/unverified', { headers });
+      if (unverifiedAccountsResponse.ok) {
         const accountsData: UnverifiedAccountsResponse = await unverifiedAccountsResponse.json();
-        
-        // Si la respuesta es exitosa, actualizamos las cuentas no verificadas
         if (accountsData.success && accountsData.accounts) {
           setUnverifiedAccounts(accountsData.accounts);
         }
       }
-
+      
       if (data.success) {
-        const videos = data.videos
-          .filter(video => video.campaign_id === parseInt(campaignId))
-          .map(video => ({
-            id: video.id,
-            user_id: video.user_id,
-            url: video.url,
-            views: video.views,
-            status: video.status,
-            payment_amount: parseFloat(video.payout),
-            created_at: video.created_at,
-            title: "Ver video",
-            description: `Campaña: ${video.campaign}`,
-            account_id: video.user_id,
-            account_username: video.account || "@Verificando...",
-            payout: video.payout,
-            account: video.account,
-            campaign: video.campaign,
-            campaign_id: video.campaign_id,
-            views_threshold: video.views_threshold,
-            price_per_view: video.price_per_view
-          }));
+        const filtered = data.videos
+  .filter(video =>
+    video.user_id === userId &&
+    video.campaign_id === parseInt(campaignId)
+  )
+  .map(video => ({
+    ...video,
+    title: "Ver video",
+    description: `Campaña: ${video.campaign}`,
+    account_username: video.account || "@Verificando..."
+  }));
+        setVideos(filtered);
 
-        setVideos(videos);
-        
-        // Si también nos llegaron cuentas no verificadas de la primera petición, las usamos como respaldo
         if (data.unverified_accounts && data.unverified_accounts.length > 0 && unverifiedAccounts.length === 0) {
           setUnverifiedAccounts(data.unverified_accounts);
         }
-        
+
         setError(null);
       } else {
-        throw new Error('Error al obtener los datos de videos');
+        throw new Error('Error al obtener los videos');
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
@@ -166,22 +157,28 @@ export default function CampaignVideos() {
     } finally {
       setLoading(false);
     }
-  }, [campaignId]);
+  }, [campaignId, userId]);
 
   useEffect(() => {
-    fetchVideos();
-  }, [fetchVideos, campaignId]);
+    const init = async () => {
+      const id = await fetchUserId();
+      if (id !== null) setUserId(id);
+      else setIsAuthError(true);
+    };
+    init();
+  }, []);
 
-  // Función para formatear el nombre de usuario
+  useEffect(() => {
+    if (userId !== null) {
+      fetchVideos();
+    }
+  }, [fetchVideos, userId]);
+
   const formatUsername = (username: string | undefined | null): string => {
-    // Si el username es undefined o null, devolver un valor por defecto
     if (!username) return "desconocido";
-
-    // Si tiene @ al principio, quitarlo
     return username.startsWith('@') ? username.substring(1) : username;
   };
 
-  // Mostrar estado de carga
   if (loading) {
     return (
       <div className="min-h-screen bg-[#121212] flex items-center justify-center">
@@ -191,14 +188,13 @@ export default function CampaignVideos() {
     );
   }
 
-  // Mostrar mensaje de error
   if (error) {
     return (
       <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center p-4">
         <p className="text-red-500 text-xl text-center">{error}</p>
         {isAuthError && (
-          <button 
-            onClick={() => navigate('/signin')} 
+          <button
+            onClick={() => navigate('/signin')}
             className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md">
             Iniciar sesión
           </button>
@@ -206,6 +202,7 @@ export default function CampaignVideos() {
       </div>
     );
   }
+
 
   // Renderizado para vista móvil de la tabla
   const renderMobileVideoCards = () => {

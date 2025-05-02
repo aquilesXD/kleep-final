@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import axios from "axios"; // Import axios for fetching data
 import Sidebar from "../../components/layout/Sidebar";
 import { CampaignSidebar } from "../layout/CampainSidebar";
 import { Testimonial } from "./Testimonial";
@@ -7,8 +8,30 @@ import { FeatureCard } from "./FeatureCard";
 import { AudienceCard } from "./AudienceCard";
 import { CheckCircle } from "lucide-react";
 
-// Interfaz para los datos de la campaña pública
-interface PublicCampaign {
+interface Comment {
+  id: number;
+  user_id: number;
+  user_name: string;
+  user_profile_image: string;
+  rating: string;
+  comment: string;
+  created_at: string;
+}
+
+interface Reward {
+  id: number;
+  image: string;
+  title: string;
+  description: string;
+}
+
+interface Audience {
+  id: number;
+  title: string;
+  description: string;
+}
+
+interface CampaignData {
   id: number;
   name: string;
   description: string;
@@ -20,224 +43,339 @@ interface PublicCampaign {
   platforms: string;
   budget_spent: string;
   created_at: string;
+  admin_id: number;
   admin_name: string;
   admin_profile_image: string;
   budget_percentage: string;
-  is_joined: boolean;
-}
-
-interface PublicCampaignResponse {
-  success: boolean;
-  total: number;
-  campaigns: PublicCampaign[];
+  joined_users_count: number;
+  joined_users_profiles: string[];
+  rating: number;
 }
 
 export default function Campaign() {
-  const { campaignId = "1" } = useParams<{ campaignId: string }>();
-  const [campaignData, setCampaignData] = useState<PublicCampaign | null>(null);
+  const { campaignId } = useParams<{ campaignId: string }>();
+  const [message, setMessage] = useState("");
+  const [campaignData, setCampaignData] = useState<CampaignData | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [rewards, setRewards] = useState<Reward[]>([]);
+  const [targetAudience, setTargetAudience] = useState<Audience[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
 
-  // Cargar datos de la campaña pública
   useEffect(() => {
-    const fetchPublicCampaignData = async () => {
+    const fetchCampaignData = async () => {
       try {
-        setLoading(true);
-        
-        const response = await fetch('https://contabl.net/kleep/api/campaigns/public/');
-
-        if (!response.ok) {
-          throw new Error(`Error al cargar los datos de la campaña (${response.status})`);
+        const response = await axios.get(
+          `https://contabl.net/kleep/api/campaigns/public/${campaignId}`
+        );
+        if (response.data.success) {
+          setCampaignData(response.data.campaign);
+          setComments(response.data.comments);
+          setRewards(response.data.rewards);
+          setTargetAudience(response.data.target_audience);
+        } else {
+          setError("Failed to fetch campaign data.");
         }
-
-        const data: PublicCampaignResponse = await response.json();
-        
-        if (!data.success) {
-          throw new Error('Error al obtener los datos de la campaña');
-        }
-
-        const campaign = data.campaigns.find((c: PublicCampaign) => c.id === parseInt(campaignId));
-        
-        if (!campaign) {
-          throw new Error('Campaña no encontrada');
-        }
-
-        setCampaignData(campaign);
-        setError(null);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-        setError(errorMessage);
+        setError("An error occurred while fetching data.");
+        console.error("Error fetching campaign data:", err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchPublicCampaignData();
+    if (campaignId) {
+      fetchCampaignData();
+    }
   }, [campaignId]);
 
-  // Formatear el precio para mostrar
-  const formatCurrency = (value: string) => {
-    const num = parseFloat(value);
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2
-    }).format(num);
-  };
-
-  // Mostrar mensaje de carga mientras se obtienen los datos
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#121212] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-violet-500"></div>
-        <p className="text-white ml-4">Cargando campaña...</p>
+      <div className="min-h-screen bg-[#121212] text-white flex justify-center items-center">
+        Loading...
       </div>
     );
   }
 
-  // Mostrar mensaje de error si algo falla
   if (error) {
     return (
-      <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center">
-        <p className="text-red-500 text-xl">Error: {error}</p>
-        <button 
-          onClick={() => window.location.reload()} 
-          className="mt-4 bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-md">
-          Reintentar
-        </button>
+      <div className="min-h-screen bg-[#121212] text-red-500 flex justify-center items-center">
+        Error: {error}
       </div>
     );
   }
 
-  // Renderizar la campaña con los datos obtenidos
+  // Ensure campaignData is not null before accessing its properties
+  if (!campaignData) {
+    return (
+      <div className="min-h-screen bg-[#121212] text-white flex justify-center items-center">
+        No campaign data available.
+      </div>
+    );
+  }
+
+  // Function to generate star rating display
+  const renderStars = (rating: number) => {
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 !== 0;
+    const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+    let stars = "";
+    for (let i = 0; i < fullStars; i++) stars += "⭐";
+    if (hasHalfStar) stars += "⭐";
+    for (let i = 0; i < emptyStars; i++) stars += "☆";
+    return stars;
+  };
+
+  // Simplified star rendering using only full stars up to the rounded rating
+  const renderFullStars = (rating: number) => {
+    const roundedRating = Math.round(rating);
+    let stars = "";
+    for (let i = 0; i < 5; i++) {
+      if (i < roundedRating) {
+        stars += "⭐";
+      } else {
+        stars += "☆";
+      }
+    }
+    return stars;
+  };
+
   return (
     <div className="min-h-screen bg-[#121212]">
       <Sidebar />
       <div className="pl-20 lg:pl-24">
         <div className="flex flex-col lg:flex-row">
           <CampaignSidebar />
-          
           <main className="flex-1 p-4 lg:p-8">
-            {campaignData && (
-              <div className="max-w-4xl mx-auto">
-                <div className="text-center">
-                  <div className="relative w-full max-h-[300px] overflow-hidden rounded-xl">
-                    <img
-                      src={campaignData.banner_image}
-                      alt=""
-                      className="w-full object-cover rounded-xl"
-                    />
-                  </div>
+            <div className="max-w-4xl mx-auto">
+              <div className="text-center">
+                <div className="relative w-full max-h-[300px] overflow-hidden rounded-xl">
+                  <img
+                    src={campaignData.banner_image} // Use API data for banner image
+                    alt={`${campaignData.admin_name} banner`} // Use API data for alt text
+                    className="w-full object-cover rounded-xl"
+                  />
+                </div>
 
-                  <div className="mt-8 flex items-center justify-center">
-                    <img
-                      src={campaignData.profile_image}
-                      alt={`${campaignData.name} logo`}
-                      width={24}
-                      height={24}
-                      className="rounded-md mr-2 border border-white/40"
-                    />
-                    <span className="font-semibold text-lg text-white">{campaignData.name}</span>
-                  </div>
+                <div className="mt-8 flex items-center justify-center">
+                  <img
+                    src={campaignData.profile_image}
+                    alt={`${campaignData.admin_name} logo`}
+                    width={24}
+                    height={24}
+                    className="rounded-md mr-2 border border-white/40"
+                  />
+                  <span className="font-semibold text-lg text-white">
+                    {campaignData.admin_name}
+                  </span>
+                </div>
 
-                  <div className="max-w-md mx-auto mt-6">
-                    <h1 className="text-3xl font-bold leading-tight text-white">
-                      {campaignData.name}
-                    </h1>
-                    <p className="mt-3 text-base text-gray-400">
-                      {campaignData.description}
-                    </p>
-
-                    <div className="mt-6 bg-[#191919] p-6 rounded-lg">
-                      <p className="font-semibold text-base text-white">
-                        Únase a 726 personas
-                      </p>
-                      <div className="flex justify-center -space-x-2 my-3">
-                        {[1, 2, 3, 4, 5].map((_, index) => (
+                <div className="max-w-md mx-auto mt-6">
+                  <h1 className="text-3xl font-bold leading-tight text-white">
+                    {campaignData.name}
+                  </h1>
+                  <p className="mt-3 text-base text-gray-400">
+                    {campaignData.description}
+                  </p>
+                  
+                  <div className="mt-6 bg-[#191919] p-6 rounded-lg">
+                    <p className="font-semibold text-base text-white">
+                      Únase a {campaignData.joined_users_count} personas
+                    </p>{" "}
+                    {/* Use API data for joined users count */}
+                    <div className="flex justify-center -space-x-2 my-3">
+                      {campaignData.joined_users_profiles
+                        .slice(0, 11) // Take up to 11 profiles
+                        .map((profileUrl, i) => (
                           <div
-                            key={index}
+                            key={i}
                             className="w-8 h-8 rounded-full border-2 border-[#121212] bg-gray-500 overflow-hidden"
                           >
                             <img
-                              src={`https://randomuser.me/api/portraits/men/${index + 1}.jpg`}
-                              alt={`Usuario ${index + 1}`}
+                              src={profileUrl} // Use API data for user profiles
+                              alt={`User ${i + 1}`}
                               className="w-full h-full object-cover"
                             />
                           </div>
                         ))}
+                    </div>
+                    <p className="text-yellow-400 font-medium">
+                        {campaignData.rating.toFixed(2)} stars ({comments.length}) {renderFullStars(campaignData.rating)}
+                    </p>{" "}
+                    {/* Use API data for rating and comment count */}
+                  </div>
+                </div>
+              </div>
+
+              {/* Testimonials Section */}
+              <section className="mt-12">
+                <div className="bg-[#191919] p-6 rounded-lg">
+                  <h2 className="text-xl font-bold text-center mb-6 text-white">
+                    Vea lo que dicen los demás
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Map over fetched comments for testimonials */}
+                    {comments.map((comment) => (
+                      <Testimonial
+                        key={comment.id} // Use comment id as key
+                        name={comment.user_name} // Use API data for name
+                        avatar={comment.user_profile_image} // Use API data for avatar
+                        rating={parseFloat(comment.rating)} // Use API data for rating
+                        text={comment.comment} // Use API data for comment text
+                        date={`Escrito el ${new Date(comment.created_at).toLocaleDateString()}`} // Use and format API date
+                      />
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              {/* Features Section */}
+              <section className="mt-12">
+                <h2 className="text-xl font-bold text-center mb-6 text-white">
+                  Esto es lo que obtendra
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Map over fetched rewards for features */}
+                  {rewards.map((reward) => (
+                    <FeatureCard
+                      key={reward.id} // Use reward id as key
+                      icon={reward.image} // Use API data for icon (image)
+                      title={reward.title} // Use API data for title
+                      description={reward.description} // Use API data for description
+                    />
+                  ))}
+                </div>
+              </section>
+
+              {/* About Creator Section */}
+              <section className="mt-12">
+                <div className="bg-[#191919] p-6 rounded-lg">
+                  <div className="max-w-md mx-auto text-center">
+                    <h2 className="text-xl font-semibold mb-4 text-white">
+                      Saber más sobre mí
+                    </h2>
+                    <div className="w-24 h-24 mx-auto mb-4 rounded-full overflow-hidden">
+                      <img
+                        src={campaignData.admin_profile_image}
+                        alt={`${campaignData.admin_name} profile`}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <h3 className="text-2xl font-bold text-white">
+                      {campaignData.admin_name}
+                    </h3>
+                    <p className="text-gray-400">
+                      @{campaignData.admin_name.replace(/\s+/g, '').toLowerCase()} • Joined in {new Date(campaignData.created_at).getFullYear()}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              {/* Target Audience Section */}
+              <section className="mt-12">
+                <h2 className="text-xl font-bold text-center mb-6 text-white">
+                  A quien va dirigido
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Map over fetched target audience */}
+                  {targetAudience.map((audience, index) => (
+                    <AudienceCard
+                      key={index} // Use index as key if no unique id
+                      title={audience.title} // Use API data for title
+                      description={audience.description} // Use API data for description
+                    />
+                  ))}
+                </div>
+              </section>
+
+              {/* Pricing Section */}
+              <section className="mt-12">
+                <div className="bg-[#191919] p-6 rounded-lg">
+                  <div className="max-w-md mx-auto text-center">
+                    <h2 className="text-xl font-semibold mb-4 text-white">
+                      Precios
+                    </h2>
+                    <div className="mb-4">
+                      <img
+                        src={campaignData.profile_image} // Use API data for campaign logo
+                        alt={`${campaignData.name} logo`} // Use API data for alt text
+                        width={60}
+                        height={60}
+                        className="rounded-xl mx-auto"
+                      />
+                      <h3 className="text-2xl font-bold mt-4 text-white">
+                       {campaignData.admin_name}
+                      </h3>{" "}
+                      {/* Use API data for campaign name */}
+                      <p className="text-lg font-semibold mt-2 text-white">
+                        {" "}
+                        
+                      </p>{" "}
+                      
+
+                      <div className="mt-6 bg-[#121212] rounded-lg">
+                        <ul className="divide-y divide-[#2a2a2a] text-left">
+                          {/* Keep hardcoded benefits as they don't map directly to API rewards */}
+                          <li className="p-4 flex items-start gap-3 text-gray-400">
+                            <CheckCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-0.5" />
+                            <span>
+                            Tipo de campaña: {campaignData.type} Plataforma {campaignData.platforms}
+                            </span>
+                          </li>
+                          <li className="p-4 flex items-start gap-3 text-gray-400">
+                            <CheckCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-0.5" />
+                            <span>
+                              Presupuesto total {campaignData.total_budget}
+                            </span>
+                            </li>
+                            <li className="p-4 flex items-start gap-3 text-gray-400">
+                            <CheckCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-0.5" />
+                            <span>
+                              Presupuesto gastado {campaignData.budget_spent}
+                            </span>
+                          
+                          </li>
+                          <li className="p-4 flex items-start gap-3 text-gray-400">
+                            <CheckCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-0.5" />
+                            <span>
+                              Precio por vista: {campaignData.price_per_view}
+                            </span>
+                          </li>
+                          <li className="p-4 flex items-start gap-3 text-gray-400">
+                            <CheckCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-0.5" />
+                            <span>
+                              Porcentaje del presupuesto: {campaignData.budget_percentage}%
+                            </span>
+                          </li>
+                        </ul>
                       </div>
-                      <p className="text-yellow-400 font-medium">
-                        4.9 estrellas (1) ⭐⭐⭐⭐⭐
-                      </p>
                     </div>
                   </div>
                 </div>
+              </section>
 
-                {/* Sección de Precios */}
-                <section className="mt-12">
-                  <div className="bg-[#191919] p-6 rounded-lg">
-                    <div className="max-w-md mx-auto text-center">
-                      <h2 className="text-xl font-semibold mb-4 text-white">Detalles de la Campaña</h2>
-                      <div className="mb-4">
-                        <img
-                          src={campaignData.profile_image}
-                          alt={campaignData.name}
-                          width={60}
-                          height={60}
-                          className="rounded-xl mx-auto"
-                        />
-                        <h3 className="text-2xl font-bold mt-4 text-white">
-                          {campaignData.name}
-                        </h3>
-                        <p className="text-lg font-semibold mt-2 text-white">
-                          {formatCurrency(campaignData.price_per_view)} por cada vista
-                        </p>
-
-                        <div className="mt-6 bg-[#121212] rounded-lg">
-                          <ul className="divide-y divide-[#2a2a2a] text-left">
-                            <li className="p-4 flex items-start gap-3 text-gray-400">
-                              <CheckCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-0.5" />
-                              <span>Presupuesto total: {formatCurrency(campaignData.total_budget)}</span>
-                            </li>
-                            <li className="p-4 flex items-start gap-3 text-gray-400">
-                              <CheckCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-0.5" />
-                              <span>Gastado hasta ahora: {formatCurrency(campaignData.budget_spent)}</span>
-                            </li>
-                            <li className="p-4 flex items-start gap-3 text-gray-400">
-                              <CheckCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-0.5" />
-                              <span>Plataformas: {campaignData.platforms}</span>
-                            </li>
-                            <li className="p-4 flex items-start gap-3 text-gray-400">
-                              <CheckCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-0.5" />
-                              <span>Porcentaje del presupuesto: {campaignData.budget_percentage}%</span>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
+              {/* More Testimonials Section */}
+              <section className="mt-12 mb-16">
+                <div className="bg-[#191919] p-6 rounded-lg">
+                  <h2 className="text-xl font-bold text-center mb-6 text-white">
+                    Reseñas
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Map over fetched comments for reviews */}
+                    {comments.map((comment) => (
+                      <Testimonial
+                        key={comment.id} // Use comment id as key
+                        name={comment.user_name} // Use API data for name
+                        avatar={comment.user_profile_image} // Use API data for avatar
+                        rating={parseFloat(comment.rating)} // Use API data for rating
+                        text={comment.comment} // Use API data for comment text
+                        date={`Escrito el ${new Date(comment.created_at).toLocaleDateString()}`} // Use and format API date
+                      />
+                    ))}
                   </div>
-                </section>
-
-                {/* Sección Acerca del Creador */}
-                <section className="mt-12">
-                  <div className="bg-[#191919] p-6 rounded-lg">
-                    <div className="max-w-md mx-auto text-center">
-                      <h2 className="text-xl font-semibold mb-4 text-white">Acerca del Creador</h2>
-                      <div className="w-24 h-24 mx-auto mb-4 rounded-full overflow-hidden">
-                        <img
-                          src={campaignData.admin_profile_image}
-                          alt={`Perfil de ${campaignData.admin_name}`}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <h3 className="text-2xl font-bold text-white">{campaignData.admin_name}</h3>
-                      <p className="text-gray-400">Administrador de la campaña</p>
-                    </div>
-                  </div>
-                </section>
-              </div>
-            )}
+                </div>
+              </section>
+            </div>
           </main>
         </div>
       </div>

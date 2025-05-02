@@ -222,19 +222,19 @@ const ProfileGeneral = () => {
       reader.onload = () => {
         const img = new Image();
         img.onload = () => {
-          setNewProfilePicture(file);
-          if (imagePreview) {
-            URL.revokeObjectURL(imagePreview);
-          }
-          const previewUrl = URL.createObjectURL(file);
-          setImagePreview(previewUrl);
-          
+      setNewProfilePicture(file);
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreview(previewUrl);
+      
           // Limpiar cualquier error previo
-          setErrors(prev => {
-            const newErrors = { ...prev };
-            delete newErrors.profilePicture;
-            return newErrors;
-          });
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.profilePicture;
+        return newErrors;
+      });
         };
         
         img.onerror = () => {
@@ -282,33 +282,33 @@ const ProfileGeneral = () => {
         imageFormData.append('profile_image', newProfilePicture);
 
         try {
-          const imageResponse = await axios.post(
-            'https://contabl.net/kleep/api/user/profile-image',
-            imageFormData,
-            {
-              headers: {
-                'Authorization': `Bearer ${token}`,
+        const imageResponse = await axios.post(
+          'https://contabl.net/kleep/api/user/profile-image',
+          imageFormData,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
                 'Content-Type': 'multipart/form-data',
                 'Accept': 'application/json'
-              }
             }
-          );
+          }
+        );
 
-          console.log('Respuesta del servidor:', imageResponse.data);
+        console.log('Respuesta del servidor:', imageResponse.data);
 
-          if (imageResponse.data.success) {
-            const newImageUrl = imageResponse.data.profile_image;
-            const finalImageUrl = newImageUrl.startsWith('http') 
-              ? newImageUrl 
+        if (imageResponse.data.success) {
+          const newImageUrl = imageResponse.data.profile_image;
+          const finalImageUrl = newImageUrl.startsWith('http') 
+            ? newImageUrl 
               : `https://contabl.net/kleep${newImageUrl.startsWith('/') ? '' : '/'}${newImageUrl}`;
             
             console.log('ProfileGeneral: URL final de la imagen:', finalImageUrl);
             
             // Actualizar el estado local
-            setProfile(prev => ({
-              ...prev,
-              profile_image: finalImageUrl
-            }));
+          setProfile(prev => ({
+            ...prev,
+            profile_image: finalImageUrl
+          }));
 
             // Actualizar el store global inmediatamente con la nueva URL
             useUserStore.getState().updateUserData({
@@ -336,7 +336,7 @@ const ProfileGeneral = () => {
                 border: '1px solid #2a2a2a',
               },
             });
-          } else {
+        } else {
             throw new Error(imageResponse.data.message || 'Error al actualizar la imagen');
           }
         } catch (imageError: any) {

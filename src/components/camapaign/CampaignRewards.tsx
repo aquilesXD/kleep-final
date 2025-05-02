@@ -323,23 +323,17 @@ export default function CampaignRewards() {
         throw new Error('No se encontró un token de autenticación. Por favor, inicia sesión.');
       }
 
-      // Obtener cuentas de TikTok verificadas
-      const accounts = await tiktokVerificationService.fetchTikTokAccountsFromNewApi();
-
-      // Verificar si hay alguna cuenta asociada
-      if (!accounts || accounts.length === 0) {
-        throw new Error('No tienes ninguna cuenta de TikTok asociada. Por favor, agrega una cuenta en tu perfil.');
+      // Extraer el username de TikTok del enlace
+      const tiktokUsername = videoLink.split('/@')[1]?.split('/')[0];
+      if (!tiktokUsername) {
+        throw new Error('No se pudo extraer el nombre de usuario de TikTok del enlace. Por favor, verifica que el enlace sea correcto.');
       }
-
-      // Seleccionar la primera cuenta verificada
-      const account = accounts[0];
 
       // Preparar datos del video
       const videoData = {
         campaign_id: Number(campaignId),
         url: videoLink,
-        tiktok_account_id: Number(account.id),
-        tiktok_username: account.username
+        tiktok_username: tiktokUsername
       };
 
       // Enviar solicitud a la API
@@ -431,7 +425,7 @@ export default function CampaignRewards() {
             <div className="max-w-4xl mx-auto">
               {/* Alerta amarilla */}
               <div className="bg-[#fffbd6] text-[#73682b] p-4 rounded-lg mb-6">
-                <p className="text-sm text-center">Inportante: luego de publicar tu vídeo, tienes máximo 1 hora para subirlo y comenzar a recibir pagos</p>
+                <p className="text-sm text-center">Importante: luego de publicar tu vídeo, tienes máximo 1 hora para subirlo y comenzar a recibir pagos</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
