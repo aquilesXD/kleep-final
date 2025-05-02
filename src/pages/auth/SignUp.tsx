@@ -4,8 +4,37 @@ import { LogoIcon } from '../../components/icons';
 import '../../components/ui/Form.css';
 import { toast } from 'react-hot-toast';
 
+const phoneFormats: Record<string, { prefix: string; maxLength: number; format: (value: string) => string }> = {
+  Argentina: { prefix: '+54', maxLength: 10, format: (v) => `${v.slice(0, 2)} ${v.slice(2, 6)}-${v.slice(6, 10)}` },
+  Bolivia: { prefix: '+591', maxLength: 8, format: (v) => `${v.slice(0, 4)}-${v.slice(4, 8)}` },
+  Brasil: { prefix: '+55', maxLength: 11, format: (v) => `(${v.slice(0, 2)}) ${v.slice(2, 7)}-${v.slice(7, 11)}` },
+  Chile: { prefix: '+56', maxLength: 9, format: (v) => `${v.slice(0, 1)} ${v.slice(1, 5)} ${v.slice(5, 9)}` },
+  Colombia: { prefix: '+57', maxLength: 10, format: (v) => `${v.slice(0, 3)} ${v.slice(3, 6)} ${v.slice(6, 10)}` },
+  'Costa Rica': { prefix: '+506', maxLength: 8, format: (v) => `${v.slice(0, 4)}-${v.slice(4, 8)}` },
+  Cuba: { prefix: '+53', maxLength: 8, format: (v) => `${v.slice(0, 4)}-${v.slice(4, 8)}` },
+  Ecuador: { prefix: '+593', maxLength: 9, format: (v) => `${v.slice(0, 2)}-${v.slice(2, 5)}-${v.slice(5, 9)}` },
+  'El Salvador': { prefix: '+503', maxLength: 8, format: (v) => `${v.slice(0, 4)}-${v.slice(4, 8)}` },
+  Guatemala: { prefix: '+502', maxLength: 8, format: (v) => `${v.slice(0, 4)}-${v.slice(4, 8)}` },
+  Honduras: { prefix: '+504', maxLength: 8, format: (v) => `${v.slice(0, 4)}-${v.slice(4, 8)}` },
+  México: { prefix: '+52', maxLength: 10, format: (v) => `${v.slice(0, 3)} ${v.slice(3, 6)} ${v.slice(6, 10)}` },
+  Nicaragua: { prefix: '+505', maxLength: 8, format: (v) => `${v.slice(0, 4)}-${v.slice(4, 8)}` },
+  Panamá: { prefix: '+507', maxLength: 8, format: (v) => `${v.slice(0, 4)}-${v.slice(4, 8)}` },
+  Paraguay: { prefix: '+595', maxLength: 9, format: (v) => `${v.slice(0, 3)}-${v.slice(3, 6)}-${v.slice(6, 9)}` },
+  Perú: { prefix: '+51', maxLength: 9, format: (v) => `${v.slice(0, 3)}-${v.slice(3, 6)}-${v.slice(6, 9)}` },
+  'Puerto Rico': { prefix: '+1', maxLength: 10, format: (v) => `(${v.slice(0, 3)}) ${v.slice(3, 6)}-${v.slice(6, 10)}` },
+  'República Dominicana': { prefix: '+1', maxLength: 10, format: (v) => `(${v.slice(0, 3)}) ${v.slice(3, 6)}-${v.slice(6, 10)}` },
+  Uruguay: { prefix: '+598', maxLength: 9, format: (v) => `${v.slice(0, 2)} ${v.slice(2, 5)} ${v.slice(5, 9)}` },
+  Venezuela: { prefix: '+58', maxLength: 11, format: (v) => `${v.slice(0, 3)}-${v.slice(3, 10)}` },
+  'Estados Unidos': { prefix: '+1', maxLength: 10, format: (v) => `(${v.slice(0, 3)}) ${v.slice(3, 6)}-${v.slice(6, 10)}` },
+  Canadá: { prefix: '+1', maxLength: 10, format: (v) => `(${v.slice(0, 3)}) ${v.slice(3, 6)}-${v.slice(6, 10)}` },
+  España: { prefix: '+34', maxLength: 9, format: (v) => `${v.slice(0, 3)} ${v.slice(3, 6)} ${v.slice(6, 9)}` },
+  Otro: { prefix: '+', maxLength: 15, format: (v) => v }
+};
+
+
 // API endpoint for user creation
 const API_USER_ENDPOINT = 'https://contabl.net/kleep/api/auth/register';
+
 
 const SignUp: React.FC = () => {
   const [email, setEmail] = useState<string>('');
@@ -124,20 +153,31 @@ const SignUp: React.FC = () => {
   };
 
   const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setCountry(e.target.value);
-    setError(null);
+    const selected = e.target.value;
+    setCountry(selected);
+    const digits = phone.replace(/\D/g, '');
+    const maxLength = phoneFormats[selected]?.maxLength || 15;
+    setPhone(digits.slice(0, maxLength));
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Solo permitir números y eliminar cualquier otro carácter
-    const value = e.target.value.replace(/\D/g, '');
-    setPhone(value);
-    setError(null);
+    setPhone(e.target.value); // sin bloquear la edición
+  };
+
+  const handlePhoneBlur = () => {
+    const formatConfig = phoneFormats[country] || phoneFormats['Otro'];
+    const digits = phone.replace(/\D/g, '');
+    const formatted = formatConfig.prefix + ' ' + formatConfig.format(digits);
+    setPhone(formatted); // al salir, aplica el formato
   };
 
   const handleAgeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Solo permitir números y eliminar cualquier otro carácter
-    const value = e.target.value.replace(/\D/g, '');
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 3) value = value.slice(0, 3);
+  
+    const numericAge = parseInt(value);
+    if (numericAge > 100) value = '100';
+  
     setAge(value);
     setError(null);
   };
@@ -320,60 +360,32 @@ const SignUp: React.FC = () => {
             </select>
           </div>
 
-          <div className="mb-4">
+        <div className="w-full mb-4">
+        <input
+        type="tel"
+        name="phone"
+        id="phone"
+        maxLength={phoneFormats[country]?.maxLength || 15}
+        value={phone}
+        onChange={handlePhoneChange}
+        onBlur={handlePhoneBlur}
+        inputMode="tel"
+        placeholder="Ej: 4121234567"
+        className={getInputClassName()}
+         />
+       </div>
+       
+          <div className="w-full mb-4">
             <input
-              className={getInputClassName()}
-              id="phone"
-              placeholder="Teléfono"
-              type="number"
-              value={phone}
-              onChange={handlePhoneChange}
-              onInput={(e) => {
-                // Forzar que solo se puedan ingresar números
-                const input = e.target as HTMLInputElement;
-                input.value = input.value.replace(/\D/g, '');
-              }}
-              onPaste={(e) => {
-                // Prevenir pegar texto no numérico
-                const pastedText = e.clipboardData.getData('text');
-                if (!/^\d+$/.test(pastedText)) {
-                  e.preventDefault();
-                }
-              }}
-              disabled={isLoading}
-              pattern="[0-9]*"
-              inputMode="numeric"
-              maxLength={15}
-              required
-            />
-          </div>
-
-          <div className="mb-4">
-            <input
-              className={getInputClassName()}
+              type="tel"
+              name="age"
               id="age"
-              placeholder="Edad"
-              type="number"
               value={age}
               onChange={handleAgeChange}
-              onInput={(e) => {
-                // Forzar que solo se puedan ingresar números
-                const input = e.target as HTMLInputElement;
-                input.value = input.value.replace(/\D/g, '');
-              }}
-              onPaste={(e) => {
-                // Prevenir pegar texto no numérico
-                const pastedText = e.clipboardData.getData('text');
-                if (!/^\d+$/.test(pastedText)) {
-                  e.preventDefault();
-                }
-              }}
-              disabled={isLoading}
-              pattern="[0-9]*"
               inputMode="numeric"
-              min="18"
-              max="120"
-              required
+              maxLength={3}
+              placeholder="Edad"
+              className={getInputClassName()}
             />
           </div>
 

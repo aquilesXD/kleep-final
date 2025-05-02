@@ -50,6 +50,8 @@ interface CampaignData {
   joined_users_count: number;
   joined_users_profiles: string[];
   rating: number;
+  rewards: Reward[];
+  target_audience: Audience[];
 }
 
 export default function Campaign() {
@@ -61,6 +63,13 @@ export default function Campaign() {
   const [targetAudience, setTargetAudience] = useState<Audience[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [requirements, setRequirements] = useState<any[]>([]);
+  const formatUSD = (value: string | number) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2
+    }).format(typeof value === 'string' ? parseFloat(value) : value);
 
   useEffect(() => {
     const fetchCampaignData = async () => {
@@ -73,6 +82,7 @@ export default function Campaign() {
           setComments(response.data.comments);
           setRewards(response.data.rewards);
           setTargetAudience(response.data.target_audience);
+          setRequirements(response.data.requirements || []);
         } else {
           setError("Failed to fetch campaign data.");
         }
@@ -149,26 +159,31 @@ export default function Campaign() {
           <main className="flex-1 p-4 lg:p-8">
             <div className="max-w-4xl mx-auto">
               <div className="text-center">
+              {campaignData?.banner_image ? (
                 <div className="relative w-full max-h-[300px] overflow-hidden rounded-xl">
                   <img
-                    src={campaignData.banner_image} // Use API data for banner image
+                  
+                    src={campaignData.banner_image ? campaignData.banner_image : undefined} // Only show banner if exists
                     alt={`${campaignData.admin_name} banner`} // Use API data for alt text
                     className="w-full object-cover rounded-xl"
                   />
                 </div>
-
-                <div className="mt-8 flex items-center justify-center">
-                  <img
-                    src={campaignData.profile_image}
-                    alt={`${campaignData.admin_name} logo`}
-                    width={24}
-                    height={24}
-                    className="rounded-md mr-2 border border-white/40"
-                  />
-                  <span className="font-semibold text-lg text-white">
-                    {campaignData.admin_name}
-                  </span>
-                </div>
+                ) : null}
+                {/* Mostrar admin_name y su imagen solo si existe */}
+                {campaignData.admin_name && (
+                  <div className="mt-8 flex items-center justify-center">
+                    <img
+                      src={campaignData.profile_image}
+                      alt={`${campaignData.admin_name} logo`}
+                      width={24}
+                      height={24}
+                      className="rounded-md mr-2 border border-white/40"
+                    />
+                    <span className="font-semibold text-lg text-white">
+                      {campaignData.admin_name}
+                    </span>
+                  </div>
+                )}
 
                 <div className="max-w-md mx-auto mt-6">
                   <h1 className="text-3xl font-bold leading-tight text-white">
@@ -177,6 +192,17 @@ export default function Campaign() {
                   <p className="mt-3 text-base text-gray-400">
                     {campaignData.description}
                   </p>
+                  {/* Requisitos de la campaña */}
+                  {Array.isArray(requirements) && requirements.length > 0 && (
+                    <div className="mt-4 bg-[#181818] p-4 rounded-lg">
+                      <h3 className="text-lg font-semibold text-white mb-2">Requisitos para participar</h3>
+                      <ul className="list-disc list-inside text-gray-300">
+                        {requirements.map((req) => (
+                          <li key={req.id}>{req.description}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   
                   <div className="mt-6 bg-[#191919] p-6 rounded-lg">
                     <p className="font-semibold text-base text-white">
@@ -229,22 +255,23 @@ export default function Campaign() {
                 </div>
               </section>
 
-              {/* Features Section */}
               <section className="mt-12">
                 <h2 className="text-xl font-bold text-center mb-6 text-white">
                   Esto es lo que obtendra
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Map over fetched rewards for features */}
-                  {rewards.map((reward) => (
-                    <FeatureCard
-                      key={reward.id} // Use reward id as key
-                      icon={reward.image} // Use API data for icon (image)
-                      title={reward.title} // Use API data for title
-                      description={reward.description} // Use API data for description
-                    />
-                  ))}
-                </div>
+                {(Array.isArray(campaignData?.rewards) && campaignData.rewards.length > 0) || (rewards && rewards.length > 0) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Map over fetched rewards for features */}
+                    {rewards.map((reward) => (
+                      <FeatureCard
+                        key={reward.id} // Use reward id as key
+                        icon={reward.image} // Use API data for icon (image)
+                        title={reward.title} // Use API data for title
+                        description={reward.description} // Use API data for description
+                      />
+                    ))}
+                  </div>
+                )}
               </section>
 
               {/* About Creator Section */}
@@ -271,23 +298,22 @@ export default function Campaign() {
                 </div>
               </section>
 
-              {/* Target Audience Section */}
               <section className="mt-12">
                 <h2 className="text-xl font-bold text-center mb-6 text-white">
-                  A quien va dirigido
+                  A quién va dirigido
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Map over fetched target audience */}
-                  {targetAudience.map((audience, index) => (
-                    <AudienceCard
-                      key={index} // Use index as key if no unique id
-                      title={audience.title} // Use API data for title
-                      description={audience.description} // Use API data for description
-                    />
-                  ))}
-                </div>
+                {(Array.isArray(campaignData?.target_audience) && campaignData.target_audience.length > 0) || (targetAudience && targetAudience.length > 0) ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {targetAudience.map((audience) => (
+                      <AudienceCard
+                        key={audience.id}
+                        title={audience.title}
+                        description={audience.description}
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </section>
-
               {/* Pricing Section */}
               <section className="mt-12">
                 <div className="bg-[#191919] p-6 rounded-lg">
@@ -295,9 +321,10 @@ export default function Campaign() {
                     <h2 className="text-xl font-semibold mb-4 text-white">
                       Precios
                     </h2>
+                    {campaignData.admin_name && campaignData.profile_image ? (
                     <div className="mb-4">
                       <img
-                        src={campaignData.profile_image} // Use API data for campaign logo
+                        src={campaignData.profile_image || ""} // Use API data for campaign logo or fallback
                         alt={`${campaignData.name} logo`} // Use API data for alt text
                         width={60}
                         height={60}
@@ -324,15 +351,11 @@ export default function Campaign() {
                           </li>
                           <li className="p-4 flex items-start gap-3 text-gray-400">
                             <CheckCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-0.5" />
-                            <span>
-                              Presupuesto total {campaignData.total_budget}
-                            </span>
+                            <span>Presupuesto total {formatUSD(campaignData.total_budget)}</span>
                             </li>
                             <li className="p-4 flex items-start gap-3 text-gray-400">
                             <CheckCircle className="h-6 w-6 text-blue-500 flex-shrink-0 mt-0.5" />
-                            <span>
-                              Presupuesto gastado {campaignData.budget_spent}
-                            </span>
+                            <span>Presupuesto gastado {formatUSD(campaignData.budget_spent)}</span>
                           
                           </li>
                           <li className="p-4 flex items-start gap-3 text-gray-400">
@@ -350,6 +373,7 @@ export default function Campaign() {
                         </ul>
                       </div>
                     </div>
+                    ) : null}
                   </div>
                 </div>
               </section>

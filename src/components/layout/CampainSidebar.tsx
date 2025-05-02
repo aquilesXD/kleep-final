@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams, useLocation } from 'react-router-dom';
+
+import { Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Home as HomeIcon, Gift, Video, Flag, SquarePen, Megaphone } from 'lucide-react';
 function getAuthToken(): string | null {
   return (
@@ -20,6 +21,7 @@ const menuItems = [
 export function CampaignSidebar({ activeItem = "overview" }) {
   const { campaignId } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [authState, setAuthState] = useState({
     isAuthenticated: false,
@@ -127,29 +129,32 @@ export function CampaignSidebar({ activeItem = "overview" }) {
         </div>
       )}
 
-      <nav className="space-y-2">
-        {menuItems.map((item, index) => {
-          const fullPath = `/campaigns/${campaignId}${item.path}`;
-          const mostrar = !item.onlyIfJoined || (authState.isAuthenticated && authState.isJoined);
+<nav className="space-y-2">
+  {menuItems.map((item, index) => {
+    const fullPath =
+    item.label === 'Resumen'
+    ? `/campaign/${campaignId}`
+    : `/campaign/${campaignId}${item.path}`;
 
-          if (!mostrar) return null;
+    const isActive = location.pathname === fullPath;
+    const mostrar = !item.onlyIfJoined || (authState.isAuthenticated && authState.isJoined);
 
-          return (
-            <Link
-              key={index}
-              to={fullPath}
-              className={`flex items-center px-4 py-3 rounded-xl font-semibold text-base text-white ${
-                activeItem === item.path.replace('/', '') ? 'bg-[#1c1c1c]' : 'hover:bg-[#1c1c1c]'
-              }`}
-            >
-              <div className="w-[30px] h-[30px] bg-blue-600 rounded flex items-center justify-center mr-3">
-                <item.icon size={18} className="text-white" />
-              </div>
-              {item.label.toUpperCase()}
-            </Link>
-          );
-        })}
-      </nav>
+    if (!mostrar) return null;
+
+    const buttonClass = `flex items-center px-4 py-3 rounded-xl font-semibold text-base text-white ${
+      isActive ? 'bg-[#1c1c1c]' : 'hover:bg-[#1c1c1c]'
+    }`;
+
+    return (
+      <Link key={index} to={fullPath} className={buttonClass}>
+        <div className="w-[30px] h-[30px] bg-blue-600 rounded flex items-center justify-center mr-3">
+          <item.icon size={18} className="text-white" />
+        </div>
+        {item.label.toUpperCase()}
+      </Link>
+    );
+  })}
+</nav>
     </aside>
   );
 }
