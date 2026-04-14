@@ -1,50 +1,78 @@
-# React + TypeScript + Vite
+# React + Vite + TypeScript Project
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Optimizaciones Aplicadas
 
-Currently, two official plugins are available:
+### 1. Configuración de Entorno
+- Variables de entorno para URLs de API (`.env`)
+- Soporte para múltiples entornos (`.env.example`)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### 2. Autenticación Centralizada
+- `AuthContext` con tipado TypeScript
+- Hook personalizado `useAuth`
+- Gestión unificada de tokens y usuarios
 
-## Expanding the ESLint configuration
+### 3. Servicios API Estandarizados
+- Instancia de Axios configurada con interceptores
+- Servicio API genérico con métodos CRUD
+- Manejo automático de errores 401
+- Tipado de respuestas
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+### 4. Optimización de Vite
+- Code splitting por vendor chunks
+- Path aliases (`@/` para `src/`)
+- Configuración TypeScript optimizada
 
-- Configure the top-level `parserOptions` property like this:
+### 5. Calidad de Código
+- ESLint configurado con reglas TypeScript
+- Prettier para formateo consistente
+- Git ignore actualizado
 
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+### 6. Dependencias Limpias
+- Eliminadas dependencias innecesarias (Next.js)
+- Solo dependencias requeridas para Vite
+
+## Scripts Disponibles
+
+```bash
+npm run dev      # Desarrollo
+npm run build    # Build de producción
+npm run preview  # Preview del build
+npm run lint     # Linting
+npm run format   # Formateo
 ```
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+## Estructura del Proyecto
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
+```
+src/
+├── components/    # Componentes reutilizables
+├── hooks/         # Custom hooks
+├── pages/         # Páginas de la aplicación
+├── services/      # Servicios API
+├── AuthContext.tsx # Contexto de autenticación
+└── main.tsx       # Entry point
+```
 
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
+## Uso de la API
+
+```typescript
+import { apiService } from '@/services';
+
+// GET request
+const data = await apiService.get<UserData>('/user/profile');
+
+// POST request
+const result = await apiService.post('/auth/login', { email, password });
+```
+
+## Uso de Autenticación
+
+```typescript
+import { useAuth } from '@/hooks';
+
+function MyComponent() {
+  const { token, user, login, logout, isAuthenticated } = useAuth();
+  
+  // ...
+}
 ```
